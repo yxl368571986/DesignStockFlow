@@ -581,15 +581,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          class="tab-item tab-upload"
+          class="tab-item"
           :class="{ active: activeTab === 'upload' }"
           @click="handleTabClick('upload')"
         >
-          <div class="upload-icon">
-            <el-icon :size="28">
-              <Upload />
-            </el-icon>
-          </div>
+          <el-icon :size="24">
+            <Upload />
+          </el-icon>
           <span class="tab-label">上传</span>
         </div>
 
@@ -983,8 +981,8 @@ onBeforeUnmount(() => {
 }
 
 .upload-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff7d00 0%, #ffa940 100%);
   display: flex;
@@ -993,11 +991,11 @@ onBeforeUnmount(() => {
   color: #fff;
   box-shadow: 0 4px 12px rgba(255, 125, 0, 0.3);
   position: absolute;
-  top: -24px;
+  top: -16px;
 }
 
 .tab-upload .tab-label {
-  margin-top: 28px;
+  margin-top: 20px;
 }
 
 .tab-upload.active .upload-icon {

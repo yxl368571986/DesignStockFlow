@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "PostgreSQL MCP 调用",
+  "description": "当编辑涉及PostgreSQL数据库操作的文件时，自动提示调用PostgreSQL MCP工具",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend/prisma/*.prisma",
+      "backend/prisma/**/*.sql",
+      "backend/src/services/*.ts",
+      "backend/src/controllers/*.ts",
+      "*.sql"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "检测到PostgreSQL数据库相关文件被编辑。请使用PostgreSQL MCP工具来协助完成数据库操作，包括查询、迁移、schema验证等任务。"
+  }
+}

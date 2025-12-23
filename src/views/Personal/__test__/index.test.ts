@@ -1,20 +1,24 @@
 /**
  * 个人中心页面单元测试
  * 测试数据加载、错误处理和空状态显示
- * Requirements: 4.1, 4.2, 4.4
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.6, 44.1
  * 
- * Task 5.1: 编写个人中心数据加载单元测试
- * - 测试成功加载数据
- * - 测试401错误处理
- * - 测试网络错误处理
- * - 测试空数据显示
+ * Task 8: 个人中心测试
+ * - 8.1 测试个人中心布局和用户信息卡片
+ * - 8.2 测试Tab切换功能
+ * - 8.3 测试编辑资料弹窗
+ * - 8.4 测试下载历史Tab
+ * - 8.5 测试上传历史Tab
+ * - 8.6 测试VIP中心Tab
+ * - 8.7 测试用户信息API
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { ElMessage } from 'element-plus';
 import ElementPlus from 'element-plus';
+import { nextTick } from 'vue';
 
 // Mock Element Plus
 vi.mock('element-plus', async () => {
@@ -31,9 +35,10 @@ vi.mock('element-plus', async () => {
 });
 
 // Mock vue-router
+const mockRouterPush = vi.fn();
 vi.mock('vue-router', () => ({
   useRouter: () => ({
-    push: vi.fn()
+    push: mockRouterPush
   })
 }));
 
@@ -44,18 +49,32 @@ vi.mock('@/api/personal', () => ({
   getVIPInfo: vi.fn()
 }));
 
-// Mock userStore
+// Mock usePointsSync
+vi.mock('@/composables/usePointsSync', () => ({
+  usePointsSync: () => ({
+    refreshPoints: vi.fn()
+  })
+}));
+
+// Mock userStore with reactive data
+const mockUserInfo = {
+  userId: 'test-user-id',
+  phone: '13800138000',
+  nickname: '测试用户',
+  avatar: 'https://example.com/avatar.jpg',
+  email: 'test@example.com',
+  vipLevel: 0,
+  vipExpireTime: null,
+  pointsBalance: 500,
+  pointsTotal: 1000,
+  createTime: '2024-01-01'
+};
+
 vi.mock('@/pinia/userStore', () => ({
   useUserStore: () => ({
-    userInfo: {
-      userId: 'test-user-id',
-      phone: '13800138000',
-      nickname: '测试用户',
-      avatar: '',
-      vipLevel: 0,
-      createTime: '2024-01-01'
-    },
-    token: 'test-token'
+    userInfo: mockUserInfo,
+    token: 'test-token',
+    pointsBalance: mockUserInfo.pointsBalance
   })
 }));
 
@@ -512,5 +531,775 @@ describe('Personal Center - isAuthError Helper', () => {
   it('should return false for timeout errors', () => {
     const error = { code: 'ECONNABORTED', message: 'timeout' };
     expect(isAuthError(error)).toBe(false);
+  });
+});
+
+/**
+ * Task 8.1: 测试个人中心布局和用户信息卡片
+ * Requirements: 9.1, 26.1
+ */
+describe('Task 8.1: Personal Center Layout and User Info Card', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    mockRouterPush.mockClear();
+    
+    // 设置默认的API响应
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getUploadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(0) as never);
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should render user info card with correct layout', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证用户信息卡片存在
+    expect(wrapper.find('.user-info-card').exists()).toBe(true);
+    // 验证用户头像区域存在
+    expect(wrapper.find('.user-avatar').exists()).toBe(true);
+    // 验证用户详情区域存在
+    expect(wrapper.find('.user-details').exists()).toBe(true);
+  });
+
+  it('should display user nickname correctly', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证昵称显示
+    const userName = wrapper.find('.user-name h2');
+    expect(userName.exists()).toBe(true);
+    expect(userName.text()).toBe('测试用户');
+  });
+
+  it('should display masked phone number', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证手机号脱敏显示
+    const phone = wrapper.find('.phone');
+    expect(phone.exists()).toBe(true);
+    expect(phone.text()).toBe('138****8000');
+  });
+
+  it('should display points balance in user info card', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证积分显示区域存在
+    expect(wrapper.find('.points-section').exists()).toBe(true);
+    expect(wrapper.find('.points-info').exists()).toBe(true);
+    expect(wrapper.find('.points-value').exists()).toBe(true);
+  });
+
+  it('should have edit avatar button', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证编辑头像按钮存在
+    expect(wrapper.find('.edit-avatar-btn').exists()).toBe(true);
+  });
+
+  it('should have edit profile button', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证编辑个人信息按钮存在
+    expect(wrapper.find('.edit-profile-btn').exists()).toBe(true);
+  });
+
+  it('should navigate to points page when clicking points info', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 点击积分信息
+    const pointsInfo = wrapper.find('.points-info');
+    await pointsInfo.trigger('click');
+
+    // 验证跳转到积分页面
+    expect(mockRouterPush).toHaveBeenCalledWith('/points');
+  });
+
+  it('should have points action buttons', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证积分操作按钮存在
+    expect(wrapper.find('.points-actions').exists()).toBe(true);
+    const actionButtons = wrapper.findAll('.points-action-btn');
+    expect(actionButtons.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * Task 8.2: 测试Tab切换功能
+ * Requirements: 9.1
+ */
+describe('Task 8.2: Tab Switching Functionality', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getUploadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(0) as never);
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should render tabs component', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证Tab组件存在
+    expect(wrapper.find('.personal-tabs').exists()).toBe(true);
+  });
+
+  it('should have downloads tab as default active tab', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证默认Tab是下载记录
+    const vm = wrapper.vm as any;
+    expect(vm.activeTab).toBe('downloads');
+  });
+
+  it('should load download history on mount', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证下载历史API被调用
+    expect(getDownloadHistory).toHaveBeenCalled();
+  });
+
+  it('should load upload history when switching to uploads tab', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到上传Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('uploads');
+    await nextTick();
+
+    // 验证上传历史API被调用
+    expect(getUploadHistory).toHaveBeenCalled();
+  });
+
+  it('should load VIP info when switching to vip tab', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到VIP Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('vip');
+    await nextTick();
+
+    // 验证VIP信息API被调用
+    expect(getVIPInfo).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 8.3: 测试编辑资料弹窗
+ * Requirements: 9.2, 44.1
+ */
+describe('Task 8.3: Edit Profile Dialog', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should open edit profile dialog when clicking edit button', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 点击编辑按钮
+    const editBtn = wrapper.find('.edit-profile-btn');
+    await editBtn.trigger('click');
+
+    // 验证弹窗状态变为可见
+    const vm = wrapper.vm as any;
+    expect(vm.editProfileVisible).toBe(true);
+  });
+
+  it('should open avatar upload dialog when clicking edit avatar button', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 点击编辑头像按钮
+    const editAvatarBtn = wrapper.find('.edit-avatar-btn');
+    await editAvatarBtn.trigger('click');
+
+    // 验证头像上传弹窗状态变为可见
+    const vm = wrapper.vm as any;
+    expect(vm.uploadAvatarVisible).toBe(true);
+  });
+});
+
+/**
+ * Task 8.4: 测试下载历史Tab
+ * Requirements: 9.3
+ */
+describe('Task 8.4: Download History Tab', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should display download records when data exists', async () => {
+    const mockRecords = createMockDownloadRecords(3);
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse(mockRecords, 3) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证下载记录列表存在
+    const vm = wrapper.vm as any;
+    expect(vm.downloadList.length).toBe(3);
+  });
+
+  it('should display empty state when no download records', async () => {
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证空状态
+    const vm = wrapper.vm as any;
+    expect(vm.downloadList.length).toBe(0);
+  });
+
+  it('should navigate to resource detail when clicking download record', async () => {
+    const mockRecords = createMockDownloadRecords(1);
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse(mockRecords, 1) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 调用查看资源方法
+    const vm = wrapper.vm as any;
+    vm.handleViewResource('res-1');
+
+    // 验证跳转
+    expect(mockRouterPush).toHaveBeenCalledWith('/resource/res-1');
+  });
+
+  it('should show loading state while fetching download history', async () => {
+    // 创建一个延迟的Promise
+    let resolvePromise: (value: any) => void;
+    const delayedPromise = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
+    vi.mocked(getDownloadHistory).mockReturnValue(delayedPromise as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    // 验证loading状态
+    const vm = wrapper.vm as any;
+    expect(vm.downloadLoading).toBe(true);
+
+    // 解决Promise
+    resolvePromise!(createMockPageResponse([], 0));
+    await flushPromises();
+
+    // 验证loading状态结束
+    expect(vm.downloadLoading).toBe(false);
+  });
+});
+
+/**
+ * Task 8.5: 测试上传历史Tab
+ * Requirements: 9.4
+ */
+describe('Task 8.5: Upload History Tab', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should display upload records when data exists', async () => {
+    const mockRecords = createMockUploadRecords(3);
+    vi.mocked(getUploadHistory).mockResolvedValue(createMockPageResponse(mockRecords, 3) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到上传Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('uploads');
+    await flushPromises();
+
+    // 验证上传记录列表存在
+    expect(vm.uploadList.length).toBe(3);
+  });
+
+  it('should display audit status correctly', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    const vm = wrapper.vm as any;
+    
+    // 测试审核状态文本
+    expect(vm.getAuditStatusText(0)).toBe('待审核');
+    expect(vm.getAuditStatusText(1)).toBe('已通过');
+    expect(vm.getAuditStatusText(2)).toBe('已驳回');
+    expect(vm.getAuditStatusText(99)).toBe('未知');
+  });
+
+  it('should display audit status class correctly', async () => {
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    const vm = wrapper.vm as any;
+    
+    // 测试审核状态样式类
+    expect(vm.getAuditStatusClass(0)).toBe('status-pending');
+    expect(vm.getAuditStatusClass(1)).toBe('status-approved');
+    expect(vm.getAuditStatusClass(2)).toBe('status-rejected');
+    expect(vm.getAuditStatusClass(99)).toBe('');
+  });
+
+  it('should navigate to upload page when clicking go upload button', async () => {
+    vi.mocked(getUploadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 调用去上传方法
+    const vm = wrapper.vm as any;
+    vm.handleGoUpload();
+
+    // 验证跳转
+    expect(mockRouterPush).toHaveBeenCalledWith('/upload');
+  });
+});
+
+/**
+ * Task 8.6: 测试VIP中心Tab
+ * Requirements: 9.6
+ */
+describe('Task 8.6: VIP Center Tab', () => {
+  let wrapper: VueWrapper<any>;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+  });
+
+  afterEach(() => {
+    if (wrapper) {
+      wrapper.unmount();
+    }
+    vi.resetAllMocks();
+  });
+
+  it('should display VIP status for VIP user', async () => {
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(1) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到VIP Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('vip');
+    await flushPromises();
+
+    // 验证VIP信息
+    expect(vm.vipInfo.vipLevel).toBe(1);
+  });
+
+  it('should display non-VIP status for regular user', async () => {
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(0) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到VIP Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('vip');
+    await flushPromises();
+
+    // 验证非VIP状态
+    expect(vm.vipInfo.vipLevel).toBe(0);
+  });
+
+  it('should navigate to VIP page when clicking purchase button', async () => {
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(0) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 调用购买VIP方法
+    const vm = wrapper.vm as any;
+    vm.handlePurchaseVIP();
+
+    // 验证跳转
+    expect(mockRouterPush).toHaveBeenCalledWith('/vip');
+  });
+
+  it('should display correct VIP level text', async () => {
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(1) as never);
+
+    wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到VIP Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('vip');
+    await flushPromises();
+
+    // 验证VIP等级文本
+    expect(vm.vipLevelText).toBe('月度会员');
+  });
+});
+
+/**
+ * Task 8.7: 测试用户信息API
+ * Requirements: 9.1, 44.1
+ */
+describe('Task 8.7: User Info API', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('should call getDownloadHistory with correct parameters', async () => {
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+
+    mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 验证API调用参数
+    expect(getDownloadHistory).toHaveBeenCalledWith({
+      pageNum: 1,
+      pageSize: 12
+    });
+  });
+
+  it('should call getUploadHistory with correct parameters', async () => {
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getUploadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+
+    const wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到上传Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('uploads');
+    await flushPromises();
+
+    // 验证API调用参数
+    expect(getUploadHistory).toHaveBeenCalledWith({
+      pageNum: 1,
+      pageSize: 12
+    });
+  });
+
+  it('should call getVIPInfo when switching to VIP tab', async () => {
+    vi.mocked(getDownloadHistory).mockResolvedValue(createMockPageResponse([], 0) as never);
+    vi.mocked(getVIPInfo).mockResolvedValue(createMockVIPResponse(0) as never);
+
+    const wrapper = mount(PersonalCenter, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          'el-icon': true
+        }
+      }
+    });
+
+    await flushPromises();
+
+    // 切换到VIP Tab
+    const vm = wrapper.vm as any;
+    vm.handleTabChange('vip');
+    await flushPromises();
+
+    // 验证API被调用
+    expect(getVIPInfo).toHaveBeenCalled();
   });
 });

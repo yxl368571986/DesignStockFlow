@@ -1,0 +1,15 @@
+{
+  "enabled": false,
+  "name": "Chrome DevTools 实时监控",
+  "description": "当我在对话框输入“检查浏览器报错”时",
+  "version": "1",
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "npx playwright test --headed --debug 2>&1 || echo \"请在浏览器中打开 DevTools (F12) 监控 Console 和 Network 面板\""
+  },
+  "workspaceFolderName": "KDemo",
+  "shortName": "chrome-devtools-monitor"
+}

@@ -79,6 +79,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/points',
+    name: 'Points',
+    component: () => import('@/views/Points/index.vue'),
+    meta: {
+      title: '我的积分 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/Auth/Login.vue'),

@@ -32,9 +32,10 @@ const TEST_ACCOUNTS = {
   }
 };
 
-// 基础URL
-const BASE_URL = 'http://localhost:5173';
-const API_BASE_URL = 'http://localhost:3000/api/v1';
+// 基础URL - 必须与 playwright.config.ts 中的 baseURL 保持一致
+// 前端服务端口: 3000, 后端API端口: 8080
+const BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 /**
  * 登录辅助函数
@@ -527,22 +528,348 @@ test.describe('下载功能测试', () => {
         await page.waitForLoadState('networkidle');
         await page.waitForTimeout(1000);
 
-        const downloadBtn = page.locator('.download-btn, button:has-text("下载"), [class*="download"]').first();
+        // 使用更精确的选择器
+        const downloadBtn = page.locator('button:has-text("立即下载"), button:has-text("登录后下载"), button:has-text("下载"), .download-btn').first();
         
         if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
           await downloadBtn.click();
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(2000);
 
-          // 应该显示登录提示或跳转到登录页
-          const loginDialog = page.locator('.el-message-box, [class*="dialog"]');
+          // 应该显示登录提示或跳转到登录页（Element Plus MessageBox）
+          const loginDialog = page.locator('.el-message-box__wrapper, .el-message-box');
           const loginPage = page.url().includes('/login');
-          const dialogVisible = await loginDialog.isVisible({ timeout: 2000 }).catch(() => false);
+          const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
           
           // 验证：要么显示登录对话框，要么跳转到登录页
           expect(dialogVisible || loginPage).toBeTruthy();
         }
       }
     });
+  });
+});
+
+/**
+ * 任务6.0.1：测试未登录状态下的下载行为
+ * 
+ * 测试场景：
+ * - 点击下载按钮 → 应弹出登录提示
+ * - 登录提示应包含"请先登录"或"登录"相关文案
+ * - 点击登录 → 应跳转到登录页面
+ * - 登录页面应保存返回URL，登录后返回原页面
+ */
+test.describe('6.0.1 测试未登录状态下的下载行为', () => {
+  test.beforeEach(async ({ page, context }) => {
+    // 清除所有登录状态
+    await context.clearCookies();
+    await page.goto(`${BASE_URL}`);
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+  });
+
+  test('点击下载按钮应弹出登录提示对话框', async ({ page }) => {
+    // 访问资源列表页
+    await page.goto(`${BASE_URL}/resource`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // 查找资源卡片
+    const resourceCard = page.locator('.resource-card, [class*="resource-item"]').first();
+    
+    if (await resourceCard.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // 点击进入资源详情
+      await resourceCard.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+
+      // 查找下载按钮 - 使用更精确的选择器
+      // DownloadButton 组件渲染的按钮文本为"立即下载"或"登录后下载"
+      const downloadBtn = page.locator('button:has-text("立即下载"), button:has-text("登录后下载"), button:has-text("下载"), .download-btn').first();
+      
+      if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // 点击下载按钮
+        await downloadBtn.click();
+        await page.waitForTimeout(2000);
+
+        // 验证：应该显示登录提示对话框（Element Plus MessageBox）
+        // Element Plus MessageBox 可能使用多种选择器
+        const loginDialog = page.locator('.el-overlay .el-message-box, .el-message-box, [role="dialog"]').first();
+        const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        
+        // 如果没有显示对话框，检查是否直接跳转到登录页
+        const currentUrl = page.url();
+        const isOnLoginPage = currentUrl.includes('/login');
+        
+        // 也检查页面上是否有"登录"相关的文本（对话框内容）
+        const hasLoginText = await page.locator('text=登录').first().isVisible({ timeout: 1000 }).catch(() => false);
+        
+        expect(dialogVisible || isOnLoginPage || hasLoginText).toBeTruthy();
+      } else {
+        // 如果没有找到下载按钮，跳过测试
+        console.log('未找到下载按钮，跳过测试');
+        test.skip();
+      }
+    } else {
+      // 如果没有找到资源卡片，跳过测试
+      console.log('未找到资源卡片，跳过测试');
+      test.skip();
+    }
+  });
+
+  test('登录提示应包含"登录"相关文案', async ({ page }) => {
+    // 访问资源列表页
+    await page.goto(`${BASE_URL}/resource`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // 查找资源卡片
+    const resourceCard = page.locator('.resource-card, [class*="resource-item"]').first();
+    
+    if (await resourceCard.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // 点击进入资源详情
+      await resourceCard.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+
+      // 查找下载按钮
+      const downloadBtn = page.locator('button:has-text("立即下载"), button:has-text("登录后下载"), button:has-text("下载"), .download-btn').first();
+      
+      if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // 点击下载按钮
+        await downloadBtn.click();
+        await page.waitForTimeout(2000);
+
+        // 检查对话框内容（Element Plus MessageBox）
+        const loginDialog = page.locator('.el-message-box__wrapper, .el-message-box');
+        const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        
+        if (dialogVisible) {
+          // 获取对话框文本内容
+          const dialogText = await loginDialog.textContent();
+          
+          // 验证对话框包含"登录"相关文案
+          const hasLoginText = dialogText?.includes('登录') || 
+                              dialogText?.includes('请先登录') ||
+                              dialogText?.includes('需要登录');
+          
+          expect(hasLoginText).toBeTruthy();
+          console.log(`对话框文案: ${dialogText}`);
+        } else {
+          // 如果没有对话框，检查是否跳转到登录页
+          const currentUrl = page.url();
+          expect(currentUrl).toContain('/login');
+        }
+      } else {
+        console.log('未找到下载按钮，跳过测试');
+        test.skip();
+      }
+    } else {
+      console.log('未找到资源卡片，跳过测试');
+      test.skip();
+    }
+  });
+
+  test('点击确认登录应跳转到登录页面', async ({ page }) => {
+    // 访问资源详情页
+    await page.goto(`${BASE_URL}/resource`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // 查找资源卡片
+    const resourceCard = page.locator('.resource-card, [class*="resource-item"]').first();
+    
+    if (await resourceCard.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // 点击进入资源详情
+      await resourceCard.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+
+      // 记录当前资源详情页URL
+      const resourceDetailUrl = page.url();
+      console.log(`资源详情页URL: ${resourceDetailUrl}`);
+
+      // 查找下载按钮
+      const downloadBtn = page.locator('button:has-text("立即下载"), button:has-text("登录后下载"), button:has-text("下载"), .download-btn').first();
+      
+      if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // 点击下载按钮
+        await downloadBtn.click();
+        await page.waitForTimeout(2000);
+
+        // 检查是否显示对话框（Element Plus MessageBox）
+        const loginDialog = page.locator('.el-message-box__wrapper, .el-message-box');
+        const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        
+        if (dialogVisible) {
+          // 点击确认按钮（确定/登录/前往登录）
+          const confirmBtn = page.locator('.el-message-box__btns button:has-text("确定"), .el-message-box__btns button:has-text("确认")').first();
+          
+          if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await confirmBtn.click();
+            await page.waitForTimeout(2000);
+          }
+        }
+
+        // 验证：应该跳转到登录页面
+        const currentUrl = page.url();
+        expect(currentUrl).toContain('/login');
+        console.log(`跳转后URL: ${currentUrl}`);
+      } else {
+        console.log('未找到下载按钮，跳过测试');
+        test.skip();
+      }
+    } else {
+      console.log('未找到资源卡片，跳过测试');
+      test.skip();
+    }
+  });
+
+  test('登录页面应保存返回URL（redirect参数）', async ({ page }) => {
+    // 访问资源详情页
+    await page.goto(`${BASE_URL}/resource`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // 查找资源卡片
+    const resourceCard = page.locator('.resource-card, [class*="resource-item"]').first();
+    
+    if (await resourceCard.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // 点击进入资源详情
+      await resourceCard.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+
+      // 记录当前资源详情页URL
+      const resourceDetailUrl = page.url();
+      const resourcePath = new URL(resourceDetailUrl).pathname;
+      console.log(`资源详情页路径: ${resourcePath}`);
+
+      // 查找下载按钮
+      const downloadBtn = page.locator('button:has-text("立即下载"), button:has-text("登录后下载"), button:has-text("下载"), .download-btn').first();
+      
+      if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // 点击下载按钮
+        await downloadBtn.click();
+        await page.waitForTimeout(2000);
+
+        // 检查是否显示对话框（Element Plus MessageBox）
+        const loginDialog = page.locator('.el-message-box__wrapper, .el-message-box');
+        const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        
+        if (dialogVisible) {
+          // 点击确认按钮
+          const confirmBtn = page.locator('.el-message-box__btns button:has-text("确定"), .el-message-box__btns button:has-text("确认")').first();
+          
+          if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await confirmBtn.click();
+            await page.waitForTimeout(2000);
+          }
+        }
+
+        // 验证：登录页面URL应包含redirect参数
+        const currentUrl = page.url();
+        expect(currentUrl).toContain('/login');
+        
+        // 检查redirect参数是否包含资源详情页路径
+        const urlObj = new URL(currentUrl);
+        const redirectParam = urlObj.searchParams.get('redirect');
+        
+        console.log(`登录页URL: ${currentUrl}`);
+        console.log(`redirect参数: ${redirectParam}`);
+        
+        // redirect参数应该存在且包含资源详情页路径
+        expect(redirectParam).toBeTruthy();
+        expect(redirectParam).toContain('/resource');
+      } else {
+        console.log('未找到下载按钮，跳过测试');
+        test.skip();
+      }
+    } else {
+      console.log('未找到资源卡片，跳过测试');
+      test.skip();
+    }
+  });
+
+  test('登录后应返回原资源详情页', async ({ page }) => {
+    // 访问资源详情页
+    await page.goto(`${BASE_URL}/resource`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // 查找资源卡片
+    const resourceCard = page.locator('.resource-card, [class*="resource-item"]').first();
+    
+    if (await resourceCard.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // 点击进入资源详情
+      await resourceCard.click();
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+
+      // 记录当前资源详情页URL
+      const resourceDetailUrl = page.url();
+      const resourcePath = new URL(resourceDetailUrl).pathname;
+      console.log(`资源详情页路径: ${resourcePath}`);
+
+      // 查找下载按钮
+      const downloadBtn = page.locator('.download-btn, button:has-text("下载"), button:has-text("登录后下载"), [class*="download"]').first();
+      
+      if (await downloadBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        // 点击下载按钮
+        await downloadBtn.click();
+        await page.waitForTimeout(1500);
+
+        // 检查是否显示对话框
+        const loginDialog = page.locator('.el-message-box, .el-dialog, [class*="dialog"]');
+        const dialogVisible = await loginDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        
+        if (dialogVisible) {
+          // 点击确认按钮
+          const confirmBtn = page.locator('.el-message-box__btns button:has-text("确定"), .el-message-box__btns button:has-text("确认"), button:has-text("登录"), button:has-text("前往登录")').first();
+          
+          if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await confirmBtn.click();
+            await page.waitForTimeout(2000);
+          }
+        }
+
+        // 确认已跳转到登录页
+        const loginUrl = page.url();
+        if (!loginUrl.includes('/login')) {
+          console.log('未跳转到登录页，跳过测试');
+          test.skip();
+          return;
+        }
+
+        // 执行登录
+        await page.fill('input[type="tel"], input[placeholder*="手机号"]', TEST_ACCOUNTS.normalUser.phone);
+        await page.fill('input[type="password"]', TEST_ACCOUNTS.normalUser.password);
+        
+        const loginBtn = page.locator('button[type="submit"], .login-btn, button:has-text("登录")').first();
+        await loginBtn.click();
+        
+        // 等待登录完成和页面跳转
+        await page.waitForTimeout(3000);
+        await page.waitForLoadState('networkidle');
+
+        // 验证：应该返回到资源详情页
+        const currentUrl = page.url();
+        const currentPath = new URL(currentUrl).pathname;
+        
+        console.log(`登录后URL: ${currentUrl}`);
+        console.log(`登录后路径: ${currentPath}`);
+        
+        // 验证返回到资源相关页面
+        expect(currentPath).toContain('/resource');
+      } else {
+        console.log('未找到下载按钮，跳过测试');
+        test.skip();
+      }
+    } else {
+      console.log('未找到资源卡片，跳过测试');
+      test.skip();
+    }
   });
 });
 

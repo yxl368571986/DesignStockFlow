@@ -45,6 +45,38 @@
           VIP到期时间：{{ vipInfo.vipExpireTime ? formatTime(vipInfo.vipExpireTime) : '未知' }}
         </div>
 
+        <!-- 积分显示 -->
+        <div class="points-section">
+          <div
+            class="points-info"
+            title="点击查看积分详情"
+            @click="goToPoints"
+          >
+            <el-icon><Coin /></el-icon>
+            <span class="points-value">{{ pointsBalance }}</span>
+            <span class="points-label">积分余额</span>
+          </div>
+          <div class="points-actions">
+            <el-button
+              size="small"
+              class="points-action-btn"
+              @click="goToPointsDetail"
+            >
+              <el-icon><List /></el-icon>
+              查看明细
+            </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              class="points-action-btn"
+              @click="goToPointsRecharge"
+            >
+              <el-icon><Plus /></el-icon>
+              积分充值
+            </el-button>
+          </div>
+        </div>
+
         <el-button
           type="primary"
           size="small"
@@ -229,21 +261,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Camera, Star } from '@element-plus/icons-vue';
+import { Camera, Star, Coin, List, Plus } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import { getDownloadHistory, getUploadHistory, getVIPInfo } from '@/api/personal';
+import { usePointsSync } from '@/composables/usePointsSync';
 import { formatTime, formatRelativeTime } from '@/utils/format';
 import { maskPhone } from '@/utils/security';
 import type { DownloadRecord, UploadRecord, VIPInfo } from '@/types/models';
 
 const router = useRouter();
 const userStore = useUserStore();
+const { refreshPoints } = usePointsSync();
 
 const userInfo = computed(() => userStore.userInfo);
 const maskedPhone = computed(() => maskPhone(userInfo.value?.phone || ''));
+const pointsBalance = computed(() => userStore.pointsBalance);
 
 const activeTab = ref('downloads');
 
@@ -439,6 +474,19 @@ function handlePurchaseVIP() {
   router.push('/vip');
 }
 
+function goToPoints() {
+  router.push('/points');
+}
+
+function goToPointsDetail() {
+  router.push('/points');
+}
+
+function goToPointsRecharge() {
+  router.push('/points');
+  // 跳转后会显示充值按钮，用户可以点击充值
+}
+
 function getAuditStatusText(status: number): string {
   const statusMap: Record<number, string> = {
     0: '待审核',
@@ -458,7 +506,14 @@ function getAuditStatusClass(status: number): string {
 }
 
 onMounted(() => {
+  // 进入页面时刷新积分余额，确保与数据库一致
+  refreshPoints(true);
   fetchDownloadHistory();
+});
+
+// 页面被激活时（从缓存恢复）也刷新积分
+onActivated(() => {
+  refreshPoints(true);
 });
 </script>
 
@@ -524,6 +579,75 @@ onMounted(() => {
     font-size: 14px;
     opacity: 0.9;
     margin-bottom: 16px;
+  }
+
+  .points-section {
+    margin-bottom: 16px;
+  }
+
+  .points-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .el-icon {
+      font-size: 24px;
+      color: #fbbf24;
+    }
+
+    .points-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .points-label {
+      font-size: 14px;
+      opacity: 0.9;
+      flex: 1;
+    }
+  }
+
+  .points-actions {
+    display: flex;
+    gap: 12px;
+
+    .points-action-btn {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      font-weight: 500;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      &.el-button--warning {
+        background: rgba(251, 191, 36, 0.3);
+        border-color: rgba(251, 191, 36, 0.5);
+
+        &:hover {
+          background: rgba(251, 191, 36, 0.5);
+        }
+      }
+
+      .el-icon {
+        margin-right: 4px;
+      }
+    }
   }
 }
 

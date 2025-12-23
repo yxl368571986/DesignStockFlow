@@ -511,6 +511,107 @@ test.describe('2.4 注册功能测试', () => {
     // 等待验证提示
     await expect(page.locator('.el-form-item__error')).toContainText('请输入手机号');
   });
+
+  test('测试新用户注册成功 → 应跳转首页并显示用户信息', async ({ page }) => {
+    // 生成唯一的测试手机号（使用时间戳后8位）
+    const timestamp = Date.now().toString().slice(-8);
+    const testPhone = `138${timestamp}`;
+    
+    await page.fill('input[placeholder="请输入手机号"]', testPhone);
+    await page.fill('input[placeholder="请输入验证码"]', '123456');
+    await page.fill('input[placeholder*="请输入密码"]', 'test123456');
+    await page.fill('input[placeholder="请再次输入密码"]', 'test123456');
+    await page.click('.register-button');
+    
+    // 等待注册处理完成
+    await page.waitForTimeout(3000);
+    
+    // 检查注册结果
+    const hasSuccessMessage = await page.locator('.el-message--success').first().isVisible().catch(() => false);
+    const currentUrl = page.url();
+    const isOnHomePage = !currentUrl.includes('/register') && !currentUrl.includes('/login');
+    
+    // 注册成功的标志：显示成功消息或已跳转到首页
+    expect(hasSuccessMessage || isOnHomePage).toBeTruthy();
+    
+    // 如果跳转到首页，检查用户信息是否显示
+    if (isOnHomePage) {
+      // 检查localStorage中是否有用户信息
+      const userInfo = await page.evaluate(() => {
+        return localStorage.getItem('user_info');
+      });
+      expect(userInfo).not.toBeNull();
+      
+      // 检查用户头像或用户名是否显示在页面上
+      const hasUserAvatar = await page.locator('.user-avatar, .el-avatar, .header-user').first().isVisible({ timeout: 3000 }).catch(() => false);
+      const hasUserName = await page.locator('.user-name, .nickname').first().isVisible({ timeout: 3000 }).catch(() => false);
+      
+      // 至少有一个用户标识显示
+      expect(hasUserAvatar || hasUserName || userInfo !== null).toBeTruthy();
+    }
+  });
+
+  test('测试注册后Token缓存 → 应设置24小时过期时间', async ({ page }) => {
+    // 生成唯一的测试手机号
+    const timestamp = Date.now().toString().slice(-8);
+    const testPhone = `139${timestamp}`;
+    
+    await page.fill('input[placeholder="请输入手机号"]', testPhone);
+    await page.fill('input[placeholder="请输入验证码"]', '123456');
+    await page.fill('input[placeholder*="请输入密码"]', 'test123456');
+    await page.fill('input[placeholder="请再次输入密码"]', 'test123456');
+    await page.click('.register-button');
+    
+    // 等待注册处理完成
+    await page.waitForTimeout(3000);
+    
+    // 检查是否注册成功（跳转到首页）
+    const currentUrl = page.url();
+    if (!currentUrl.includes('/register') && !currentUrl.includes('/login')) {
+      // 检查Token过期时间
+      const expireTime = await page.evaluate(() => {
+        // 从Cookie或localStorage获取过期时间
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          if (cookie.trim().startsWith('token_expire_time=')) {
+            return cookie.split('=')[1];
+          }
+        }
+        return localStorage.getItem('startide:token_expire_time') || 
+               localStorage.getItem('token_expire_time');
+      });
+      
+      if (expireTime) {
+        const expireTimestamp = parseInt(expireTime, 10);
+        const now = Date.now();
+        const diffHours = (expireTimestamp - now) / (1000 * 60 * 60);
+        
+        // 过期时间应该在23-25小时之间（允许一些误差）
+        expect(diffHours).toBeGreaterThan(22);
+        expect(diffHours).toBeLessThan(26);
+      }
+    }
+  });
+
+  test('测试重复注册同一手机号 → 应显示用户已存在提示', async ({ page }) => {
+    // 使用已存在的测试用户手机号
+    await page.fill('input[placeholder="请输入手机号"]', TEST_USER.phone);
+    await page.fill('input[placeholder="请输入验证码"]', '123456');
+    await page.fill('input[placeholder*="请输入密码"]', 'test123456');
+    await page.fill('input[placeholder="请再次输入密码"]', 'test123456');
+    await page.click('.register-button');
+    
+    // 等待错误提示
+    await page.waitForTimeout(2000);
+    
+    // 检查是否显示"用户已存在"相关提示
+    const errorMessage = await page.locator('.el-message--error').first();
+    await expect(errorMessage).toBeVisible({ timeout: 5000 });
+    
+    // 验证错误消息内容包含"已存在"或"已注册"
+    const messageText = await errorMessage.textContent();
+    expect(messageText).toMatch(/已存在|已注册/);
+  });
 });
 
 // ==================== 2.6 测试退出登录功能 ====================

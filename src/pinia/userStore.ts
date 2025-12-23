@@ -125,6 +125,26 @@ export const useUserStore = defineStore('user', () => {
     return userInfo.value.nickname || userInfo.value.phone;
   });
 
+  /**
+   * 用户积分余额
+   */
+  const pointsBalance = computed(() => {
+    if (!userInfo.value) {
+      return 0;
+    }
+    return userInfo.value.pointsBalance || 0;
+  });
+
+  /**
+   * 用户累计积分
+   */
+  const pointsTotal = computed(() => {
+    if (!userInfo.value) {
+      return 0;
+    }
+    return userInfo.value.pointsTotal || 0;
+  });
+
   // ========== 操作 (Actions) ==========
 
   /**
@@ -145,19 +165,24 @@ export const useUserStore = defineStore('user', () => {
    *
    * 注意：实际的Token存储由security.ts的setToken函数处理（存储在Cookie中）
    * 这里只是更新Store中的状态标记
+   * 
+   * 缓存策略：
+   * - 默认缓存24小时，超过24小时需要重新登录
+   * - 如果选择"记住我"，缓存7天
    */
   function setToken(newToken: string, rememberMe: boolean = false, expireTime?: number): void {
     // 更新Store中的Token状态
     token.value = newToken;
 
-    // 计算过期时间
-    const calculatedExpireTime = expireTime || 
-      Date.now() + (rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+    // 计算过期时间：默认24小时，记住我则7天
+    const defaultExpireTime = Date.now() + 24 * 60 * 60 * 1000; // 24小时
+    const rememberMeExpireTime = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7天
+    const calculatedExpireTime = expireTime || (rememberMe ? rememberMeExpireTime : defaultExpireTime);
 
-    // 同步设置Token和过期时间到Cookie（不使用异步import）
+    // 同步设置Token和过期时间到Cookie
     setTokenCookie(newToken, rememberMe);
     setTokenExpireTime(calculatedExpireTime);
-    console.log('Token和过期时间已同步设置');
+    console.log('Token和过期时间已同步设置，过期时间:', new Date(calculatedExpireTime).toLocaleString());
   }
 
   /**
@@ -281,6 +306,8 @@ export const useUserStore = defineStore('user', () => {
     isVIP,
     vipLevelName,
     displayName,
+    pointsBalance,
+    pointsTotal,
 
     // 操作
     setUserInfo,

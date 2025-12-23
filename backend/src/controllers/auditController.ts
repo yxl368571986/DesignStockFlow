@@ -59,6 +59,8 @@ class AuditController {
 
       const list = resources.map(r => ({
         ...r,
+        // 将BigInt转换为Number以支持JSON序列化
+        file_size: r.file_size ? Number(r.file_size) : 0,
         user: r.users_resources_user_idTousers,
         category: r.categories,
       }));

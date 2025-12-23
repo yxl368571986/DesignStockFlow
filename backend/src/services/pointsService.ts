@@ -124,7 +124,7 @@ export async function getPointsRecords(userId: string, options: {
       createdAt: record.created_at,
     })),
     total,
-    page,
+    pageNum: page,
     pageSize,
   };
 }

@@ -9,6 +9,7 @@ import { ElMessageBox, ElMessage } from 'element-plus';
 import { useUserStore } from '@/pinia/userStore';
 import { downloadResource } from '@/api/resource';
 import { getMyPointsInfo } from '@/api/points';
+import { usePointsSync } from './usePointsSync';
 
 /**
  * 下载组合式函数
@@ -16,6 +17,7 @@ import { getMyPointsInfo } from '@/api/points';
 export function useDownload() {
   const router = useRouter();
   const userStore = useUserStore();
+  const { refreshAfterDownload } = usePointsSync();
 
   // ========== 状态 ==========
 
@@ -315,23 +317,13 @@ export function useDownload() {
 
         // 如果消耗了积分，更新用户积分信息
         if (!userStore.isVIP && pointsCost > 0) {
-          try {
-            const res = await getMyPointsInfo();
-            if (res.code === 200 && res.data) {
-              // 更新用户store中的积分信息
-              userStore.updateUserInfo({
-                pointsBalance: res.data.pointsBalance,
-                pointsTotal: res.data.pointsTotal
-              });
-            }
-          } catch (e) {
-            console.error('更新积分信息失败:', e);
-          }
+          // 使用积分同步功能刷新积分余额
+          await refreshAfterDownload(pointsCost);
         }
 
         return {
           success: true,
-          pointsBalance: permission.pointsBalance
+          pointsBalance: userStore.pointsBalance
         };
       } else {
         error.value = response.msg || '下载失败';

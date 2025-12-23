@@ -22,7 +22,8 @@ import {
   Upload,
   User,
   Close as CloseIcon,
-  ArrowLeft
+  ArrowLeft,
+  Coin
 } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
@@ -50,6 +51,7 @@ const userInfo = computed(() => userStore.userInfo);
 const displayName = computed(() => userStore.displayName);
 const isVIP = computed(() => userStore.isVIP);
 const vipLevelName = computed(() => userStore.vipLevelName);
+const pointsBalance = computed(() => userStore.pointsBalance);
 const primaryCategories = computed(() => configStore.primaryCategories);
 const hotCategories = computed(() => configStore.hotCategories);
 
@@ -108,6 +110,14 @@ function goToUpload() {
  */
 function goToVIP() {
   router.push('/vip');
+  drawerVisible.value = false;
+}
+
+/**
+ * 跳转到积分页面
+ */
+function goToPoints() {
+  router.push('/points');
   drawerVisible.value = false;
 }
 
@@ -399,6 +409,15 @@ onBeforeUnmount(() => {
                 v-if="isVIP"
                 class="vip-badge"
               >{{ vipLevelName }}</span>
+              <!-- 积分显示 -->
+              <div
+                class="user-points"
+                title="点击查看积分详情"
+                @click="goToPoints"
+              >
+                <el-icon><Coin /></el-icon>
+                <span>{{ pointsBalance }} 积分</span>
+              </div>
             </div>
           </div>
 
@@ -789,6 +808,30 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   font-weight: 500;
   width: fit-content;
+}
+
+/* 用户积分显示 */
+.user-points {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #f59e0b;
+  margin-top: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.user-points:hover,
+.user-points:active {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.user-points .el-icon {
+  font-size: 14px;
 }
 
 .login-prompt {

@@ -170,7 +170,7 @@ export class UserService {
             resourceId: record.resources.resource_id,
             title: record.resources.title,
             coverImage: record.resources.cover,
-            fileSize: record.resources.file_size,
+            fileSize: record.resources.file_size?.toString() || '0', // 将BigInt转换为字符串
             downloadCount: record.resources.download_count,
             vipLevel: record.resources.vip_level,
             category: record.resources.categories

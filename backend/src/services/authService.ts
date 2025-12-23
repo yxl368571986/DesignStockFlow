@@ -42,7 +42,7 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new Error('该手机号已注册');
+      throw new Error('用户已存在，该手机号已注册');
     }
 
     // 5. 加密密码
@@ -86,7 +86,7 @@ export class AuthService {
       (rp) => rp.permissions.permission_code
     ) || [];
 
-    // 9. 生成JWT Token
+    // 9. 生成JWT Token（注册用户默认24小时过期）
     const token = this.generateToken({
       userId: user.user_id,
       phone: user.phone,
@@ -95,9 +95,8 @@ export class AuthService {
       permissions,
     });
 
-    // 10. 计算Token过期时间
-    const expiresIn = config.jwt.expiresIn || '7d';
-    const expireTime = this.calculateExpireTime(expiresIn);
+    // 10. 计算Token过期时间（注册用户默认24小时）
+    const expireTime = this.calculateExpireTime('24h');
 
     // 11. 返回用户信息和Token
     return {

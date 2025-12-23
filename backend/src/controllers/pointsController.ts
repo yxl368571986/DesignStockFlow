@@ -35,15 +35,23 @@ export async function getPointsRecords(req: Request, res: Response) {
       return errorResponse(res, '未登录', 401);
     }
 
-    const { page, pageSize, changeType, startDate, endDate } = req.query;
+    // 支持 page/pageNum 和 pageSize/page_size 两种命名方式
+    const { page, page_num, pageSize, page_size, changeType, change_type, startDate, start_date, endDate, end_date } = req.query;
 
     const options: any = {};
     
-    if (page) options.page = parseInt(page as string);
-    if (pageSize) options.pageSize = parseInt(pageSize as string);
-    if (changeType) options.changeType = changeType as string;
-    if (startDate) options.startDate = new Date(startDate as string);
-    if (endDate) options.endDate = new Date(endDate as string);
+    // 优先使用 page_num（前端 pageNum 转换后的值），其次使用 page
+    const pageValue = page_num || page;
+    const pageSizeValue = page_size || pageSize;
+    const changeTypeValue = change_type || changeType;
+    const startDateValue = start_date || startDate;
+    const endDateValue = end_date || endDate;
+    
+    if (pageValue) options.page = parseInt(pageValue as string);
+    if (pageSizeValue) options.pageSize = parseInt(pageSizeValue as string);
+    if (changeTypeValue) options.changeType = changeTypeValue as string;
+    if (startDateValue) options.startDate = new Date(startDateValue as string);
+    if (endDateValue) options.endDate = new Date(endDateValue as string);
 
     const result = await pointsService.getPointsRecords(userId, options);
     

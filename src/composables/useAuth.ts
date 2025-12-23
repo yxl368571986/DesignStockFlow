@@ -191,15 +191,26 @@ export function useAuth() {
       const response = await registerAPI(registerRequest);
 
       // 检查响应
-      if (response.code === 200) {
-        // 显示成功提示
-        ElMessage.success('注册成功，请登录');
+      if (response.code === 200 && response.data) {
+        // 注册成功后，后端返回token和用户信息
+        // 计算24小时过期时间
+        const expireTime = response.data.expireTime
+          ? new Date(response.data.expireTime).getTime()
+          : Date.now() + 24 * 60 * 60 * 1000; // 默认24小时
 
-        // 跳转到登录页
-        await router.push('/login');
+        // 保存token和用户信息到本地缓存
+        userStore.setToken(response.data.token, false, expireTime);
+        userStore.setUserInfo(response.data.userInfo);
+
+        // 显示成功提示
+        ElMessage.success('注册成功');
+
+        // 直接跳转到首页
+        await router.push('/');
 
         return { success: true };
       } else {
+        // 后端会返回"该手机号已注册"等错误信息
         error.value = response.msg || '注册失败';
         ElMessage.error(error.value);
         return { success: false, error: error.value };

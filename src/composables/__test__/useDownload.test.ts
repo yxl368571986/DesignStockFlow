@@ -787,3 +787,168 @@ describe('useDownload', () => {
 
 // Import userStore after mocks are set up
 import { useUserStore } from '@/pinia/userStore';
+
+/**
+ * 任务6.0.1：测试未登录状态下的下载行为
+ * 
+ * 测试场景：
+ * - 点击下载按钮 → 应弹出登录提示
+ * - 登录提示应包含"登录"相关文案
+ * - 点击登录 → 应跳转到登录页面
+ * - 登录页面应保存返回URL
+ */
+describe('6.0.1 测试未登录状态下的下载行为', () => {
+  let mockConfirm: any;
+
+  beforeEach(async () => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+
+    // 获取mock实例
+    const { ElMessageBox } = await import('element-plus');
+    mockConfirm = vi.mocked(ElMessageBox.confirm);
+    mockConfirm.mockResolvedValue(undefined);
+  });
+
+  it('未登录用户点击下载应显示登录提示对话框', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 尝试下载
+    const result = await handleDownload('resource123', 0, 0);
+
+    // 验证：应该显示登录对话框
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('需要登录');
+  });
+
+  it('登录提示对话框应包含"登录"相关文案', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 尝试下载
+    await handleDownload('resource123', 0, 0);
+
+    // 验证：对话框文案应包含"登录"
+    expect(mockConfirm).toHaveBeenCalledWith(
+      expect.stringContaining('登录'),
+      expect.any(String),
+      expect.any(Object)
+    );
+  });
+
+  it('用户确认登录后应跳转到登录页面', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 用户确认前往登录
+    mockConfirm.mockResolvedValue(undefined);
+
+    // 尝试下载
+    await handleDownload('resource123', 0, 0);
+
+    // 验证：应该跳转到登录页面
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/login'
+      })
+    );
+  });
+
+  it('跳转登录页面时应保存返回URL（redirect参数）', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 用户确认前往登录
+    mockConfirm.mockResolvedValue(undefined);
+
+    // 尝试下载
+    await handleDownload('resource123', 0, 0);
+
+    // 验证：跳转时应包含redirect参数
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/login',
+        query: expect.objectContaining({
+          redirect: expect.any(String)
+        })
+      })
+    );
+  });
+
+  it('用户取消登录对话框时不应跳转', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 用户取消登录
+    mockConfirm.mockRejectedValue(new Error('cancel'));
+
+    // 尝试下载
+    const result = await handleDownload('resource123', 0, 0);
+
+    // 验证：不应该跳转
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('需要登录');
+  });
+
+  it('未登录用户不应调用下载API', async () => {
+    const { handleDownload } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    // 用户取消登录
+    mockConfirm.mockRejectedValue(new Error('cancel'));
+
+    // 尝试下载
+    await handleDownload('resource123', 0, 0);
+
+    // 验证：不应该调用下载API
+    expect(resourceAPI.downloadResource).not.toHaveBeenCalled();
+  });
+
+  it('showLoginDialog应返回正确的确认结果', async () => {
+    const { showLoginDialog } = useDownload();
+
+    // 用户确认
+    mockConfirm.mockResolvedValue(undefined);
+    const confirmResult = await showLoginDialog();
+    expect(confirmResult).toBe(true);
+
+    // 用户取消
+    mockConfirm.mockRejectedValue(new Error('cancel'));
+    const cancelResult = await showLoginDialog();
+    expect(cancelResult).toBe(false);
+  });
+
+  it('checkDownloadPermission应正确检测未登录状态', async () => {
+    const { checkDownloadPermission } = useDownload();
+    const userStore = useUserStore();
+
+    // 确保用户未登录
+    userStore.logout();
+
+    const result = await checkDownloadPermission(0, 0);
+
+    expect(result.hasPermission).toBe(false);
+    expect(result.reason).toBe('not_logged_in');
+  });
+});

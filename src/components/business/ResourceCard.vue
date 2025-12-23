@@ -49,6 +49,17 @@ const emit = defineEmits<{
 const router = useRouter();
 const userStore = useUserStore();
 
+// 计算属性：封面图URL（带默认占位图）
+const coverUrl = computed(() => {
+  const cover = props.resource.cover;
+  // 如果封面图是相对路径且可能不存在，使用占位图服务
+  if (cover && cover.startsWith('/covers/')) {
+    // 使用在线占位图服务
+    return `https://picsum.photos/seed/${props.resource.resourceId}/400/300`;
+  }
+  return cover || `https://picsum.photos/seed/${props.resource.resourceId}/400/300`;
+});
+
 // 计算属性：格式化下载次数
 const formattedDownloadCount = computed(() => {
   return formatDownloadCount(props.resource.downloadCount);
@@ -64,23 +75,24 @@ const vipLabel = computed(() => {
   return isVIP.value ? 'VIP' : '';
 });
 
-// 计算属性：是否显示积分信息（仅登录用户显示）
+// 计算属性：是否显示积分信息（所有用户都显示，包括未登录用户）
 const showPointsInfo = computed(() => {
-  return userStore.isLoggedIn;
+  return true; // 所有用户都能看到积分信息
 });
 
 // 计算属性：积分消耗文本
 const pointsCostText = computed(() => {
-  if (!showPointsInfo.value) {
-    return '';
+  // VIP资源显示"会员下载"
+  if (isVIP.value) {
+    return '会员下载';
   }
 
   // VIP用户显示"VIP免费"
-  if (userStore.isVIP) {
+  if (userStore.isLoggedIn && userStore.isVIP) {
     return 'VIP免费';
   }
 
-  // 普通用户根据资源的pointsCost显示
+  // 根据资源的pointsCost显示
   const pointsCost = props.resource.pointsCost || 0;
   if (pointsCost === 0) {
     return '免费下载';
@@ -91,12 +103,14 @@ const pointsCostText = computed(() => {
 
 // 计算属性：积分标签类型
 const pointsTagType = computed(() => {
-  if (!showPointsInfo.value) {
-    return 'info';
+  // VIP资源使用黄色/橙色
+  if (isVIP.value) {
+    return 'warning';
   }
 
-  if (userStore.isVIP) {
-    return 'warning'; // VIP免费用橙色
+  // VIP用户显示橙色
+  if (userStore.isLoggedIn && userStore.isVIP) {
+    return 'warning';
   }
 
   const pointsCost = props.resource.pointsCost || 0;
@@ -135,7 +149,7 @@ function handleCollect(event?: Event) {
     <!-- 封面图区域 -->
     <div class="card-cover">
       <el-image
-        :src="resource.cover"
+        :src="coverUrl"
         :alt="resource.title"
         :lazy="lazy"
         fit="cover"
@@ -219,7 +233,7 @@ function handleCollect(event?: Event) {
         </span>
       </div>
 
-      <!-- 积分信息（仅登录用户显示） -->
+      <!-- 积分信息（所有用户都显示） -->
       <div
         v-if="showPointsInfo"
         class="card-points"
@@ -228,9 +242,10 @@ function handleCollect(event?: Event) {
           :type="pointsTagType"
           size="small"
           effect="dark"
+          class="points-tag"
         >
-          <el-icon><Coin /></el-icon>
-          <span>{{ pointsCostText }}</span>
+          <el-icon class="points-icon"><Coin /></el-icon>
+          <span class="points-text">{{ pointsCostText }}</span>
         </el-tag>
       </div>
     </div>
@@ -401,16 +416,44 @@ function handleCollect(event?: Event) {
   margin-top: 8px;
 }
 
-.card-points .el-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.card-points .points-tag {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
   font-weight: 600;
-  padding: 4px 12px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  min-width: fit-content;
+  line-height: 1;
+  height: auto;
 }
 
-.card-points .el-icon {
+.card-points .points-icon {
+  flex-shrink: 0;
   font-size: 14px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle;
+}
+
+.card-points .points-text {
+  white-space: nowrap;
+  display: inline !important;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* 确保el-tag内部元素对齐 */
+:deep(.el-tag) {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+:deep(.el-tag .el-icon) {
+  margin-right: 0 !important;
 }
 
 /* 移动端适配 */

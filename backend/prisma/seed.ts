@@ -407,7 +407,12 @@ async function main() {
   
   await prisma.users.upsert({
     where: { phone: '13800000002' },
-    update: {},
+    update: {
+      password_hash: testPassword,
+      nickname: 'VIP测试用户',
+      vip_level: 1,
+      vip_expire_at: vipExpireDate,
+    },
     create: {
       phone: '13800000002',
       password_hash: testPassword,

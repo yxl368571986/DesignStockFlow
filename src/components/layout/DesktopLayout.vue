@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
-import { User, Upload, Download, Setting } from '@element-plus/icons-vue';
+import { User, Upload, Download, Setting, Coin } from '@element-plus/icons-vue';
 import SearchBar from '@/components/business/SearchBar.vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
@@ -38,6 +38,7 @@ const userInfo = computed(() => userStore.userInfo);
 const displayName = computed(() => userStore.displayName);
 const isVIP = computed(() => userStore.isVIP);
 const vipLevelName = computed(() => userStore.vipLevelName);
+const pointsBalance = computed(() => userStore.pointsBalance);
 const siteConfig = computed(() => configStore.siteConfig);
 const primaryCategories = computed(() => configStore.primaryCategories);
 const hotCategories = computed(() => configStore.hotCategories);
@@ -100,6 +101,13 @@ function goToUpload() {
 function goToVIP() {
   router.push('/vip');
   showUserMenu.value = false;
+}
+
+/**
+ * 跳转到积分页面
+ */
+function goToPoints() {
+  router.push('/points');
 }
 
 /**
@@ -241,6 +249,16 @@ onBeforeUnmount(() => {
 
           <!-- 已登录状态 -->
           <template v-else>
+            <!-- 积分显示 -->
+            <div
+              class="points-display"
+              title="点击查看积分详情"
+              @click="goToPoints"
+            >
+              <el-icon><Coin /></el-icon>
+              <span class="points-value">{{ pointsBalance }}</span>
+              <span class="points-label">积分</span>
+            </div>
             <!-- 上传按钮 -->
             <el-button
               type="warning"
@@ -250,53 +268,67 @@ onBeforeUnmount(() => {
             >
               上传作品
             </el-button>
-            <el-dropdown
-              trigger="click"
-              @visible-change="(visible: boolean) => (showUserMenu = visible)"
-            >
-              <div class="user-info">
-                <el-avatar
-                  :src="userInfo?.avatar"
-                  :size="40"
-                  class="user-avatar"
-                >
-                  <el-icon><User /></el-icon>
-                </el-avatar>
-                <div class="user-details">
+            <!-- 用户信息 - 移到最右侧 -->
+            <div class="user-info-wrapper">
+              <el-dropdown
+                trigger="click"
+                @visible-change="(visible: boolean) => (showUserMenu = visible)"
+              >
+                <div class="user-info">
+                  <el-avatar
+                    :src="userInfo?.avatar"
+                    :size="36"
+                    class="user-avatar"
+                  >
+                    <el-icon><User /></el-icon>
+                  </el-avatar>
                   <span class="user-name">{{ displayName }}</span>
                   <span
                     v-if="isVIP"
                     class="vip-badge"
                   >{{ vipLevelName }}</span>
                 </div>
-              </div>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="goToPersonal">
-                    <el-icon><User /></el-icon>
-                    个人中心
-                  </el-dropdown-item>
-                  <el-dropdown-item @click="goToVIP">
-                    <el-icon><Download /></el-icon>
-                    VIP中心
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="isAdmin"
-                    @click="goToAdmin"
-                  >
-                    <el-icon><Setting /></el-icon>
-                    管理后台
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    divided
-                    @click="handleLogout"
-                  >
-                    <el-icon><Setting /></el-icon>
-                    退出登录
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <!-- 积分余额显示 -->
+                    <div class="dropdown-points-display">
+                      <el-icon class="points-icon"><Coin /></el-icon>
+                      <span class="points-balance">{{ pointsBalance }}</span>
+                      <span class="points-text">积分</span>
+                    </div>
+                    <el-dropdown-item
+                      divided
+                      @click="goToPersonal"
+                    >
+                      <el-icon><User /></el-icon>
+                      个人中心
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="goToPoints">
+                      <el-icon><Coin /></el-icon>
+                      我的积分
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="goToVIP">
+                      <el-icon><Download /></el-icon>
+                      VIP中心
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="isAdmin"
+                      @click="goToAdmin"
+                    >
+                      <el-icon><Setting /></el-icon>
+                      管理后台
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      divided
+                      @click="handleLogout"
+                    >
+                      <el-icon><Setting /></el-icon>
+                      退出登录
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </div>
       </div>
@@ -341,7 +373,17 @@ onBeforeUnmount(() => {
                 class="category-item"
                 @click="goToCategory(category.categoryId)"
               >
-                <span class="category-icon">{{ category.icon || '📁' }}</span>
+                <img
+                  v-if="category.icon && category.icon.startsWith('/')"
+                  :src="category.icon"
+                  :alt="category.categoryName"
+                  class="category-icon-img"
+                  @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                >
+                <span
+                  v-else
+                  class="category-icon"
+                >{{ category.icon || '📁' }}</span>
                 <span class="category-name">{{ category.categoryName }}</span>
                 <span class="category-count">{{ category.resourceCount || 0 }}</span>
               </li>
@@ -359,7 +401,17 @@ onBeforeUnmount(() => {
                 class="category-item"
                 @click="goToCategory(category.categoryId)"
               >
-                <span class="category-icon">{{ category.icon || '📁' }}</span>
+                <img
+                  v-if="category.icon && category.icon.startsWith('/')"
+                  :src="category.icon"
+                  :alt="category.categoryName"
+                  class="category-icon-img"
+                  @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                >
+                <span
+                  v-else
+                  class="category-icon"
+                >{{ category.icon || '📁' }}</span>
                 <span class="category-name">{{ category.categoryName }}</span>
                 <span class="category-count">{{ category.resourceCount || 0 }}</span>
               </li>
@@ -620,6 +672,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  margin-left: auto; /* 推到最右边 */
 }
 
 /* 登录注册按钮组 */
@@ -675,34 +728,73 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
+/* 积分显示 */
+.points-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid #bae6fd;
+}
+
+.points-display:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  transform: translateY(-1px);
+}
+
+.points-display .el-icon {
+  font-size: 18px;
+  color: #f59e0b;
+}
+
+.points-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.points-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 用户信息包装器 - 确保在最右侧 */
+.user-info-wrapper {
+  margin-left: 8px;
+  border-left: 1px solid #e4e7ed;
+  padding-left: 16px;
+}
+
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 6px 12px;
   border-radius: 24px;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  border: 1px solid #e4e7ed;
+  background: #fff;
 }
 
 .user-info:hover {
   background-color: #f5f7fa;
+  border-color: #dcdfe6;
 }
 
 .user-avatar {
   flex-shrink: 0;
 }
 
-.user-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .user-name {
   font-size: 14px;
   font-weight: 500;
   color: #303133;
+  white-space: nowrap;
 }
 
 .vip-badge {
@@ -712,6 +804,35 @@ onBeforeUnmount(() => {
   padding: 2px 8px;
   border-radius: 10px;
   font-weight: 500;
+}
+
+/* 下拉菜单积分显示 */
+.dropdown-points-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 1px solid #fcd34d;
+  margin: -5px -1px 0 -1px;
+  border-radius: 4px 4px 0 0;
+}
+
+.dropdown-points-display .points-icon {
+  font-size: 20px;
+  color: #f59e0b;
+}
+
+.dropdown-points-display .points-balance {
+  font-size: 18px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.dropdown-points-display .points-text {
+  font-size: 12px;
+  color: #92400e;
 }
 
 /* ========== 主体内容 ========== */
@@ -838,6 +959,13 @@ onBeforeUnmount(() => {
 .category-icon {
   font-size: 18px;
   flex-shrink: 0;
+}
+
+.category-icon-img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .category-name {

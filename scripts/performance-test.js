@@ -193,7 +193,7 @@ async function testLongListPerformance(url) {
   const page = await browser.newPage();
   
   // 导航到资源列表页
-  await page.goto(`${url}/resource/list`);
+  await page.goto(`${url}/resource`);
   await page.waitForSelector('.resource-card', { timeout: 10000 });
   
   // 测试滚动性能

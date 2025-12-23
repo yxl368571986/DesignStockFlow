@@ -3,7 +3,7 @@
     "collect": {
       "url": [
         "http://localhost:5173/",
-        "http://localhost:5173/resource/list",
+        "http://localhost:5173/resource",
         "http://localhost:5173/resource/detail/1"
       ],
       "numberOfRuns": 3,

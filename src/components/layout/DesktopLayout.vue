@@ -123,7 +123,7 @@ function handleLogout() {
  * 跳转到分类页面
  */
 function goToCategory(categoryId: string) {
-  router.push(`/resource/list?categoryId=${categoryId}`);
+  router.push(`/resource?categoryId=${categoryId}`);
 }
 
 /**

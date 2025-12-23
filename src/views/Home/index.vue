@@ -334,7 +334,7 @@ function handleCategoryChange(categoryId: string | null): void {
   console.log('切换分类:', categoryId);
   // 跳转到资源列表页
   router.push({
-    path: '/resource/list',
+    path: '/resource',
     query: categoryId ? { categoryId } : undefined
   });
 }
@@ -387,7 +387,7 @@ async function handleResourceCollect(resourceId: string): Promise<void> {
  */
 function viewMoreHotResources(): void {
   router.push({
-    path: '/resource/list',
+    path: '/resource',
     query: { sortType: 'hot' }
   });
 }
@@ -397,7 +397,7 @@ function viewMoreHotResources(): void {
  */
 function viewMoreRecommendedResources(): void {
   router.push({
-    path: '/resource/list',
+    path: '/resource',
     query: { sortType: 'download' }
   });
 }

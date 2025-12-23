@@ -17,6 +17,9 @@
     "test:coverage": "node --max-old-space-size=8192 --expose-gc ./node_modules/vitest/vitest.mjs --coverage",
     "test:ui": "node --max-old-space-size=8192 --expose-gc ./node_modules/vitest/vitest.mjs --ui",
     "test:batch": "node --max-old-space-size=4096 --expose-gc scripts/run-tests-batch.js",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --ignore-path .gitignore",
     "format": "prettier --write src/",
@@ -51,6 +54,7 @@
     "xss": "^1.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/crypto-js": "^4.2.0",
     "@types/dompurify": "^3.0.5",
     "@types/js-cookie": "^3.0.6",

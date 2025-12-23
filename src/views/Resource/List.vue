@@ -20,7 +20,7 @@ import { useResourceStore } from '@/pinia/resourceStore';
 import { useConfigStore } from '@/pinia/configStore';
 import { useUserStore } from '@/pinia/userStore';
 import { useOffline } from '@/composables/useOffline';
-import { collectResource, uncollectResource } from '@/api/resource';
+import { collectResource } from '@/api/resource';
 import ResourceCard from '@/components/business/ResourceCard.vue';
 import Loading from '@/components/common/Loading.vue';
 import Empty from '@/components/common/Empty.vue';
@@ -194,10 +194,10 @@ function saveSortPreference(sortType: 'comprehensive' | 'download' | 'latest' | 
  * 从URL参数初始化筛选条件
  */
 function initFiltersFromURL() {
-  const { category, format, vip, sort, page, keyword } = route.query;
+  const { categoryId, category, format, vip, sort, page, keyword } = route.query;
 
-  // 设置筛选条件
-  filters.value.categoryId = category as string | undefined;
+  // 设置筛选条件（兼容 categoryId 和 category 两种参数名）
+  filters.value.categoryId = (categoryId || category) as string | undefined;
   filters.value.format = format as string | undefined;
   filters.value.vipLevel = vip ? Number(vip) : undefined;
   
@@ -229,7 +229,7 @@ function updateURL() {
   const query: Record<string, string> = {};
 
   if (filters.value.categoryId) {
-    query.category = filters.value.categoryId;
+    query.categoryId = filters.value.categoryId;
   }
   if (filters.value.format) {
     query.format = filters.value.format;
@@ -247,7 +247,8 @@ function updateURL() {
     query.keyword = resourceStore.searchParams.keyword;
   }
 
-  router.replace({ query });
+  // 使用 push 而不是 replace，确保URL完全更新
+  router.push({ path: '/resource', query });
 }
 
 /**

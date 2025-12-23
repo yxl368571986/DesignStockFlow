@@ -57,13 +57,14 @@ app.use(
   })
 );
 
-// 限流
+// 限流 - 开发环境放宽限制以支持E2E测试
 const limiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.maxRequests,
+  max: config.server.env === 'development' ? 1000 : config.rateLimit.maxRequests, // 开发环境1000次/15分钟
   message: '请求过于频繁，请稍后再试',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (_req) => config.server.env === 'development', // 开发环境跳过限流
 });
 app.use('/api/', limiter);
 

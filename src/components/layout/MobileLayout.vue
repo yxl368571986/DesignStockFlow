@@ -57,7 +57,7 @@ const hotCategories = computed(() => configStore.hotCategories);
 const activeTab = computed(() => {
   const path = route.path;
   if (path === '/') return 'home';
-  if (path.startsWith('/categories') || path.startsWith('/resource/list')) return 'category';
+  if (path.startsWith('/categories') || path.startsWith('/resource')) return 'category';
   if (path.startsWith('/upload')) return 'upload';
   if (path.startsWith('/personal')) return 'personal';
   return 'home';
@@ -116,7 +116,7 @@ function goToVIP() {
  */
 function goToCategory(categoryId?: string) {
   if (categoryId) {
-    router.push(`/resource/list?categoryId=${categoryId}`);
+    router.push(`/resource?categoryId=${categoryId}`);
   } else {
     router.push('/categories');
   }

@@ -431,6 +431,14 @@ export default defineConfig(({ mode }) => {
         'axios',
         'dayjs'
       ]
+    },
+    css: {
+      preprocessorOptions: {
+        scss: {
+          api: 'modern-compiler', // 使用现代Sass编译器API
+          silenceDeprecations: ['legacy-js-api'], // 静默旧API警告
+        },
+      },
     }
   };
 });

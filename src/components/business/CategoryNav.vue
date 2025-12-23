@@ -55,12 +55,13 @@
         >
           <div class="category-content">
             <!-- 分类图标 -->
-            <el-icon
-              v-if="category.icon"
-              class="category-icon"
+            <img
+              v-if="category.icon && category.icon.startsWith('/')"
+              :src="category.icon"
+              :alt="category.categoryName"
+              class="category-icon-img"
+              @error="handleIconError"
             >
-              <component :is="category.icon" />
-            </el-icon>
             <el-icon
               v-else
               class="category-icon"
@@ -210,21 +211,35 @@ const hasSubCategories = (categoryId: string) => {
  * 处理分类点击
  */
 function handleCategoryClick(categoryId: string | null) {
-  // 更新路由参数
-  router.push({
-    path: route.path,
-    query: {
-      ...route.query,
-      categoryId: categoryId || undefined,
-      pageNum: '1' // 重置页码
-    }
-  });
+  // 判断当前是否在资源列表页
+  const isResourceListPage = route.path === '/resource' || route.name === 'ResourceList';
 
-  // 触发事件
-  emit('categoryChange', categoryId);
+  if (isResourceListPage) {
+    // 在资源列表页：更新当前页面的路由参数
+    router.push({
+      path: route.path,
+      query: {
+        ...route.query,
+        categoryId: categoryId || undefined,
+        pageNum: '1' // 重置页码
+      }
+    });
+  } else {
+    // 在其他页面（如首页）：触发事件，由父组件处理跳转
+    emit('categoryChange', categoryId);
+  }
 
   // 关闭下拉菜单
   hoveredCategoryId.value = null;
+}
+
+/**
+ * 处理图标加载失败
+ */
+function handleIconError(event: Event) {
+  const img = event.target as HTMLImageElement;
+  // 隐藏加载失败的图标
+  img.style.display = 'none';
 }
 
 /**
@@ -468,6 +483,13 @@ watch(
   .active & {
     color: #fff;
   }
+}
+
+.category-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .category-name {

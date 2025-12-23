@@ -245,6 +245,10 @@ describe('useDownload', () => {
 
     it('should show login dialog when user is not logged in', async () => {
       const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+      
+      // 确保用户未登录状态
+      userStore.logout();
 
       mockConfirm.mockResolvedValue(undefined);
 
@@ -426,6 +430,357 @@ describe('useDownload', () => {
       resetError();
 
       expect(error.value).toBeNull();
+    });
+  });
+
+  describe('VIP用户下载测试', () => {
+    it('VIP用户下载VIP资源应该不显示积分确认对话框', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      const futureDate = new Date();
+      futureDate.setFullYear(futureDate.getFullYear() + 1);
+
+      // 设置VIP用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'VIP User',
+        avatar: '',
+        vipLevel: 1,
+        vipExpireTime: futureDate.toISOString(),
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      const mockResponse: ApiResponse<{ downloadUrl: string }> = {
+        code: 200,
+        msg: '下载成功',
+        data: {
+          downloadUrl: 'https://example.com/download/resource123'
+        },
+        timestamp: Date.now()
+      };
+
+      vi.mocked(resourceAPI.downloadResource).mockResolvedValue(mockResponse);
+
+      // Mock document methods
+      const mockLink = {
+        href: '',
+        style: { display: '' },
+        download: '',
+        click: vi.fn()
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink as any);
+      vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as any);
+      vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as any);
+
+      const result = await handleDownload('resource123', 1, 10);
+
+      // VIP用户下载VIP资源应该成功，不显示积分确认对话框
+      expect(result.success).toBe(true);
+      expect(resourceAPI.downloadResource).toHaveBeenCalledWith('resource123');
+    });
+
+    it('VIP用户下载免费资源应该成功', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      const futureDate = new Date();
+      futureDate.setFullYear(futureDate.getFullYear() + 1);
+
+      // 设置VIP用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'VIP User',
+        avatar: '',
+        vipLevel: 1,
+        vipExpireTime: futureDate.toISOString(),
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      const mockResponse: ApiResponse<{ downloadUrl: string }> = {
+        code: 200,
+        msg: '下载成功',
+        data: {
+          downloadUrl: 'https://example.com/download/resource123'
+        },
+        timestamp: Date.now()
+      };
+
+      vi.mocked(resourceAPI.downloadResource).mockResolvedValue(mockResponse);
+
+      // Mock document methods
+      const mockLink = {
+        href: '',
+        style: { display: '' },
+        download: '',
+        click: vi.fn()
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink as any);
+      vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as any);
+      vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as any);
+
+      const result = await handleDownload('resource123', 0, 0);
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('积分不足下载测试', () => {
+    it('积分不足时应该显示积分不足对话框', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      // Mock积分余额不足
+      vi.mocked(pointsAPI.getMyPointsInfo).mockResolvedValue({
+        code: 200,
+        msg: 'success',
+        data: { pointsBalance: 5, pointsTotal: 5 },
+        timestamp: Date.now()
+      } as any);
+
+      // 获取mock实例
+      const { ElMessageBox } = await import('element-plus');
+      const mockConfirm = vi.mocked(ElMessageBox.confirm);
+      mockConfirm.mockResolvedValue(undefined);
+
+      const result = await handleDownload('resource123', 0, 10);
+
+      // 积分不足应该返回失败
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('积分不足');
+      expect(result.pointsBalance).toBe(5);
+    });
+
+    it('积分充足时应该显示积分确认对话框', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      // Mock积分余额充足
+      vi.mocked(pointsAPI.getMyPointsInfo).mockResolvedValue({
+        code: 200,
+        msg: 'success',
+        data: { pointsBalance: 100, pointsTotal: 100 },
+        timestamp: Date.now()
+      } as any);
+
+      // 获取mock实例
+      const { ElMessageBox } = await import('element-plus');
+      const mockConfirm = vi.mocked(ElMessageBox.confirm);
+      // 用户确认下载
+      mockConfirm.mockResolvedValue(undefined);
+
+      const mockResponse: ApiResponse<{ downloadUrl: string }> = {
+        code: 200,
+        msg: '下载成功',
+        data: {
+          downloadUrl: 'https://example.com/download/resource123'
+        },
+        timestamp: Date.now()
+      };
+
+      vi.mocked(resourceAPI.downloadResource).mockResolvedValue(mockResponse);
+
+      // Mock document methods
+      const mockLink = {
+        href: '',
+        style: { display: '' },
+        download: '',
+        click: vi.fn()
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink as any);
+      vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as any);
+      vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as any);
+
+      const result = await handleDownload('resource123', 0, 10);
+
+      // 积分充足且用户确认后应该下载成功
+      expect(result.success).toBe(true);
+      // 应该调用了确认对话框
+      expect(mockConfirm).toHaveBeenCalled();
+    });
+
+    it('用户取消积分确认对话框时应该取消下载', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      // Mock积分余额充足
+      vi.mocked(pointsAPI.getMyPointsInfo).mockResolvedValue({
+        code: 200,
+        msg: 'success',
+        data: { pointsBalance: 100, pointsTotal: 100 },
+        timestamp: Date.now()
+      } as any);
+
+      // 获取mock实例
+      const { ElMessageBox } = await import('element-plus');
+      const mockConfirm = vi.mocked(ElMessageBox.confirm);
+      // 用户取消下载
+      mockConfirm.mockRejectedValue(new Error('cancel'));
+
+      const result = await handleDownload('resource123', 0, 10);
+
+      // 用户取消后应该返回失败
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('用户取消下载');
+    });
+  });
+
+  describe('下载链接安全性测试', () => {
+    it('下载API应该返回有效的下载URL', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      const mockResponse: ApiResponse<{ downloadUrl: string }> = {
+        code: 200,
+        msg: '下载成功',
+        data: {
+          downloadUrl: 'https://example.com/download/resource123?token=abc123&expires=1234567890'
+        },
+        timestamp: Date.now()
+      };
+
+      vi.mocked(resourceAPI.downloadResource).mockResolvedValue(mockResponse);
+
+      // Mock document methods
+      const mockLink = {
+        href: '',
+        style: { display: '' },
+        download: '',
+        click: vi.fn()
+      };
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink as any);
+      vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as any);
+      vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as any);
+
+      const result = await handleDownload('resource123', 0, 0);
+
+      expect(result.success).toBe(true);
+      // 验证下载链接被设置到a标签
+      expect(mockLink.href).toBe('https://example.com/download/resource123?token=abc123&expires=1234567890');
+    });
+
+    it('未登录用户不应该能够获取下载链接', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 确保用户未登录
+      userStore.logout();
+
+      // 获取mock实例
+      const { ElMessageBox } = await import('element-plus');
+      const mockConfirm = vi.mocked(ElMessageBox.confirm);
+      mockConfirm.mockRejectedValue(new Error('cancel'));
+
+      const result = await handleDownload('resource123', 0, 0);
+
+      // 未登录用户应该无法下载
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('需要登录');
+      // 不应该调用下载API
+      expect(resourceAPI.downloadResource).not.toHaveBeenCalled();
+    });
+
+    it('下载API返回错误时应该正确处理', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      // Mock下载API返回错误
+      const mockResponse: ApiResponse<{ downloadUrl: string }> = {
+        code: 403,
+        msg: '资源已下架',
+        data: null as any,
+        timestamp: Date.now()
+      };
+
+      vi.mocked(resourceAPI.downloadResource).mockResolvedValue(mockResponse);
+
+      const result = await handleDownload('resource123', 0, 0);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('资源已下架');
+    });
+
+    it('下载API抛出异常时应该正确处理', async () => {
+      const { handleDownload } = useDownload();
+      const userStore = useUserStore();
+
+      // 设置普通用户
+      userStore.setUserInfo({
+        userId: '123',
+        phone: '13800138000',
+        nickname: 'Test User',
+        avatar: '',
+        vipLevel: 0,
+        createTime: '2024-01-01T00:00:00Z'
+      });
+      userStore.setToken('test-token');
+
+      // Mock下载API抛出异常
+      vi.mocked(resourceAPI.downloadResource).mockRejectedValue(new Error('网络错误'));
+
+      const result = await handleDownload('resource123', 0, 0);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('网络错误');
     });
   });
 });

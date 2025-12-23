@@ -1,0 +1,940 @@
+/**
+ * 管理后台UI设计样式
+ * 
+ * 设计理念：
+ * - 现代化扁平设计
+ * - 渐变色和毛玻璃效果
+ * - 专业配色方案(主色#165DFF蓝色+辅色#FF7D00橙色)
+ * - 微动画提升交互体验
+ * - 卡片式布局
+ * - 支持暗黑模式
+ * 
+ * 需求: 需求21 A部分
+ */
+
+/* ==================== 全局变量 ==================== */
+:root {
+  /* 主题色 */
+  --admin-primary: #165DFF;
+  --admin-primary-light: #4080FF;
+  --admin-primary-dark: #0E42D2;
+  --admin-secondary: #FF7D00;
+  --admin-secondary-light: #FFA940;
+  --admin-secondary-dark: #D66A00;
+  
+  /* 功能色 */
+  --admin-success: #00B42A;
+  --admin-warning: #FF7D00;
+  --admin-danger: #F53F3F;
+  --admin-info: #165DFF;
+  
+  /* 中性色 */
+  --admin-bg: #F5F7FA;
+  --admin-bg-light: #FFFFFF;
+  --admin-bg-dark: #E5E6EB;
+  --admin-text: #1D2129;
+  --admin-text-secondary: #4E5969;
+  --admin-text-disabled: #C9CDD4;
+  --admin-border: #E5E6EB;
+  --admin-border-light: #F2F3F5;
+  
+  /* 阴影 */
+  --admin-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --admin-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  
+  /* 圆角 */
+  --admin-radius-sm: 4px;
+  --admin-radius-md: 8px;
+  --admin-radius-lg: 12px;
+  
+  /* 动画时长 */
+  --admin-transition-fast: 0.2s;
+  --admin-transition-normal: 0.3s;
+  --admin-transition-slow: 0.5s;
+}
+
+/* 暗黑模式变量 */
+.dark {
+  --admin-bg: #1A1A1A;
+  --admin-bg-light: #2A2A2A;
+  --admin-bg-dark: #0A0A0A;
+  --admin-text: #E0E0E0;
+  --admin-text-secondary: #A0A0A0;
+  --admin-text-disabled: #606060;
+  --admin-border: #3A3A3A;
+  --admin-border-light: #2A2A2A;
+  
+  --admin-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --admin-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ==================== 卡片样式 ==================== */
+.admin-card {
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow-sm);
+  padding: 24px;
+  transition: all var(--admin-transition-normal);
+}
+
+.admin-card:hover {
+  box-shadow: var(--admin-shadow-md);
+  transform: translateY(-2px);
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--admin-border-light);
+}
+
+.admin-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--admin-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-card-title::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  background: linear-gradient(135deg, var(--admin-primary), var(--admin-primary-light));
+  border-radius: 2px;
+}
+
+.admin-card-body {
+  color: var(--admin-text-secondary);
+}
+
+/* ==================== 渐变背景 ==================== */
+.admin-gradient-primary {
+  background: linear-gradient(135deg, var(--admin-primary), var(--admin-primary-light));
+}
+
+.admin-gradient-secondary {
+  background: linear-gradient(135deg, var(--admin-secondary), var(--admin-secondary-light));
+}
+
+.admin-gradient-success {
+  background: linear-gradient(135deg, #00B42A, #23C343);
+}
+
+.admin-gradient-danger {
+  background: linear-gradient(135deg, #F53F3F, #F76560);
+}
+
+/* ==================== 毛玻璃效果 ==================== */
+.admin-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .admin-glass {
+  background: rgba(42, 42, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== 按钮样式 ==================== */
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--admin-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all var(--admin-transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 按钮波纹效果 */
+.admin-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.admin-btn:active::after {
+  width: 300px;
+  height: 300px;
+}
+
+/* 主要按钮 */
+.admin-btn-primary {
+  background: var(--admin-primary);
+  color: white;
+}
+
+.admin-btn-primary:hover {
+  background: var(--admin-primary-light);
+  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* 危险按钮 */
+.admin-btn-danger {
+  background: var(--admin-danger);
+  color: white;
+}
+
+.admin-btn-danger:hover {
+  background: #F76560;
+  box-shadow: 0 4px 12px rgba(245, 63, 63, 0.3);
+  transform: translateY(-1px);
+}
+
+/* 警告按钮 */
+.admin-btn-warning {
+  background: var(--admin-warning);
+  color: white;
+}
+
+.admin-btn-warning:hover {
+  background: var(--admin-secondary-light);
+  box-shadow: 0 4px 12px rgba(255, 125, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+/* 次要按钮 */
+.admin-btn-secondary {
+  background: var(--admin-bg-dark);
+  color: var(--admin-text-secondary);
+}
+
+.admin-btn-secondary:hover {
+  background: var(--admin-border);
+  color: var(--admin-text);
+}
+
+/* ==================== 数据卡片 ==================== */
+.admin-stat-card {
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-lg);
+  padding: 24px;
+  box-shadow: var(--admin-shadow-sm);
+  transition: all var(--admin-transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, transparent, rgba(22, 93, 255, 0.1));
+  border-radius: 0 0 0 100%;
+}
+
+.admin-stat-card:hover {
+  box-shadow: var(--admin-shadow-md);
+  transform: translateY(-4px);
+}
+
+.admin-stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--admin-text);
+  margin: 12px 0;
+  background: linear-gradient(135deg, var(--admin-primary), var(--admin-primary-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.admin-stat-label {
+  font-size: 14px;
+  color: var(--admin-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-stat-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.admin-stat-trend.up {
+  background: rgba(0, 180, 42, 0.1);
+  color: var(--admin-success);
+}
+
+.admin-stat-trend.down {
+  background: rgba(245, 63, 63, 0.1);
+  color: var(--admin-danger);
+}
+
+/* ==================== 动画效果 ==================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.admin-fade-in {
+  animation: fadeIn var(--admin-transition-normal) ease-out;
+}
+
+.admin-slide-in {
+  animation: slideIn var(--admin-transition-normal) ease-out;
+}
+
+.admin-slide-out {
+  animation: slideOut var(--admin-transition-normal) ease-out;
+}
+
+/* ==================== 平滑滚动 ==================== */
+.admin-smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+/* ==================== 响应式 ==================== */
+@media (max-width: 768px) {
+  .admin-card {
+    padding: 16px;
+  }
+  
+  .admin-stat-card {
+    padding: 16px;
+  }
+  
+  .admin-stat-value {
+    font-size: 24px;
+  }
+}
+
+
+/* ==================== 表单样式 (需求21 E部分) ==================== */
+.admin-form {
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-lg);
+  padding: 24px;
+  box-shadow: var(--admin-shadow-sm);
+}
+
+.admin-form-item {
+  margin-bottom: 24px;
+}
+
+.admin-form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text);
+  margin-bottom: 8px;
+}
+
+.admin-form-label .icon {
+  color: var(--admin-primary);
+}
+
+.admin-form-input {
+  width: 100%;
+  transition: all var(--admin-transition-fast);
+}
+
+.admin-form-input:focus-within {
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.2);
+}
+
+/* 表单验证状态 */
+.admin-form-item.is-error .admin-form-input {
+  border-color: var(--admin-danger);
+}
+
+.admin-form-item.is-success .admin-form-input {
+  border-color: var(--admin-success);
+}
+
+.admin-form-error {
+  color: var(--admin-danger);
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: slideIn var(--admin-transition-fast);
+}
+
+.admin-form-success {
+  color: var(--admin-success);
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: slideIn var(--admin-transition-fast);
+}
+
+/* 步骤条 */
+.admin-steps {
+  margin-bottom: 32px;
+}
+
+.admin-steps .el-step__title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.admin-steps .el-step__icon.is-text {
+  border-width: 2px;
+}
+
+.admin-steps .el-step.is-process .el-step__icon {
+  background: linear-gradient(135deg, var(--admin-primary), var(--admin-primary-light));
+  border-color: var(--admin-primary);
+}
+
+/* ==================== 按钮增强样式 (需求21 F部分) ==================== */
+/* 已在前面定义，这里添加更多样式 */
+
+.admin-btn-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: all var(--admin-transition-fast);
+}
+
+.admin-btn-icon:hover {
+  transform: scale(1.15) rotate(5deg);
+}
+
+/* ==================== 通知和反馈 (需求21 G部分) ==================== */
+.admin-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  max-width: 400px;
+}
+
+.admin-notification-item {
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--admin-shadow-lg);
+  animation: slideIn var(--admin-transition-normal);
+  border-left: 4px solid;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.admin-notification-item.success {
+  border-left-color: var(--admin-success);
+}
+
+.admin-notification-item.error {
+  border-left-color: var(--admin-danger);
+}
+
+.admin-notification-item.warning {
+  border-left-color: var(--admin-warning);
+}
+
+.admin-notification-item.info {
+  border-left-color: var(--admin-info);
+}
+
+.admin-notification-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.admin-notification-content {
+  flex: 1;
+}
+
+.admin-notification-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin-bottom: 4px;
+}
+
+.admin-notification-message {
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+}
+
+.admin-notification-close {
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  transition: color var(--admin-transition-fast);
+}
+
+.admin-notification-close:hover {
+  color: var(--admin-text);
+}
+
+/* 通知红点 */
+.admin-badge-dot {
+  position: relative;
+}
+
+.admin-badge-dot::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--admin-danger);
+  border-radius: 50%;
+  border: 2px solid var(--admin-bg-light);
+  animation: pulse 2s infinite;
+}
+
+/* ==================== 加载和骨架屏 (需求21 H部分) ==================== */
+.admin-skeleton {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.admin-skeleton-line {
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--admin-bg-dark) 25%,
+    var(--admin-border-light) 50%,
+    var(--admin-bg-dark) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--admin-radius-sm);
+  margin-bottom: 12px;
+}
+
+.admin-skeleton-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--admin-bg-dark) 25%,
+    var(--admin-border-light) 50%,
+    var(--admin-bg-dark) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.admin-skeleton-rect {
+  height: 100px;
+  background: linear-gradient(
+    90deg,
+    var(--admin-bg-dark) 25%,
+    var(--admin-border-light) 50%,
+    var(--admin-bg-dark) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--admin-radius-md);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 顶部进度条 */
+.admin-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--admin-primary), var(--admin-secondary));
+  transform-origin: left;
+  z-index: 9999;
+  transition: transform 0.3s ease;
+}
+
+/* 加载动画 */
+.admin-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.admin-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--admin-border);
+  border-top-color: var(--admin-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-loading-text {
+  font-size: 14px;
+  color: var(--admin-text-secondary);
+}
+
+/* 加载进度 */
+.admin-loading-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-loading-progress-bar {
+  width: 200px;
+  height: 4px;
+  background: var(--admin-bg-dark);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.admin-loading-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--admin-primary), var(--admin-primary-light));
+  transition: width 0.3s ease;
+}
+
+.admin-loading-progress-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-primary);
+}
+
+/* ==================== 空状态设计 (需求21 I部分) ==================== */
+.admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.admin-empty-image {
+  width: 200px;
+  height: 200px;
+  margin-bottom: 24px;
+  opacity: 0.6;
+}
+
+.admin-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin-bottom: 8px;
+}
+
+.admin-empty-description {
+  font-size: 14px;
+  color: var(--admin-text-secondary);
+  margin-bottom: 24px;
+  max-width: 400px;
+}
+
+.admin-empty-action {
+  display: flex;
+  gap: 12px;
+}
+
+/* 搜索无结果 */
+.admin-no-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+}
+
+.admin-no-result-icon {
+  font-size: 64px;
+  color: var(--admin-text-disabled);
+  margin-bottom: 16px;
+}
+
+.admin-no-result-text {
+  font-size: 14px;
+  color: var(--admin-text-secondary);
+}
+
+/* ==================== 创意交互 (需求21 J部分) ==================== */
+/* 卡片悬浮效果 */
+.admin-card-interactive {
+  transition: all var(--admin-transition-normal);
+  cursor: pointer;
+}
+
+.admin-card-interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--admin-shadow-lg);
+}
+
+.admin-card-interactive:active {
+  transform: translateY(-2px);
+}
+
+/* 列表项动画 */
+.admin-list-item {
+  transition: all var(--admin-transition-normal);
+}
+
+.admin-list-item.entering {
+  animation: slideIn var(--admin-transition-normal);
+}
+
+.admin-list-item.leaving {
+  animation: slideOut var(--admin-transition-normal);
+}
+
+/* 数据更新动画 */
+.admin-data-update {
+  animation: fadeIn var(--admin-transition-normal);
+}
+
+/* 长时间无操作提示 */
+.admin-idle-tip {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-lg);
+  padding: 16px 20px;
+  box-shadow: var(--admin-shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: slideIn var(--admin-transition-normal);
+  z-index: 1000;
+}
+
+.admin-idle-tip-icon {
+  font-size: 24px;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.admin-idle-tip-text {
+  font-size: 14px;
+  color: var(--admin-text-secondary);
+}
+
+/* ==================== 个性化设置 (需求21 K部分) ==================== */
+.admin-theme-settings {
+  background: var(--admin-bg-light);
+  border-radius: var(--admin-radius-lg);
+  padding: 24px;
+  box-shadow: var(--admin-shadow-sm);
+}
+
+.admin-theme-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--admin-border-light);
+}
+
+.admin-theme-settings-item:last-child {
+  border-bottom: none;
+}
+
+.admin-theme-settings-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.admin-theme-settings-description {
+  font-size: 12px;
+  color: var(--admin-text-secondary);
+  margin-top: 4px;
+}
+
+/* 主题色选择器 */
+.admin-color-picker {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: all var(--admin-transition-fast);
+  position: relative;
+}
+
+.admin-color-option:hover {
+  transform: scale(1.15);
+}
+
+.admin-color-option.active {
+  border-color: var(--admin-text);
+}
+
+.admin-color-option.active::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* 字体大小调整 */
+.admin-font-size-slider {
+  width: 200px;
+}
+
+/* 侧边栏宽度调整 */
+.admin-sidebar-width-slider {
+  width: 200px;
+}
+
+/* ==================== 响应式优化 ==================== */
+@media (max-width: 1200px) {
+  .admin-card {
+    padding: 20px;
+  }
+  
+  .admin-stat-card {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-card {
+    padding: 16px;
+  }
+  
+  .admin-stat-card {
+    padding: 16px;
+  }
+  
+  .admin-stat-value {
+    font-size: 24px;
+  }
+  
+  .admin-notification {
+    left: 10px;
+    right: 10px;
+    max-width: none;
+  }
+  
+  .admin-empty-image {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-btn-group {
+    flex-direction: column;
+  }
+  
+  .admin-btn {
+    width: 100%;
+  }
+}

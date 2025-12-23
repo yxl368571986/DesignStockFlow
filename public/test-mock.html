@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock服务测试 - 星潮设计</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #165DFF 0%, #0E42D2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #f5f7fa;
+            border-bottom: 1px solid #e4e7ed;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #165DFF;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0E42D2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(22, 93, 255, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #67C23A;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #529B2E;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(103, 194, 58, 0.4);
+        }
+        
+        .btn-danger {
+            background: #F56C6C;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #DD6161;
+        }
+        
+        .status {
+            flex: 1;
+            text-align: right;
+            font-size: 14px;
+            color: #606266;
+        }
+        
+        .results {
+            padding: 30px;
+        }
+        
+        .test-item {
+            margin-bottom: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .test-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-header {
+            padding: 15px 20px;
+            background: #f5f7fa;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        
+        .test-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        
+        .test-status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-success {
+            background: #f0f9ff;
+            color: #67C23A;
+        }
+        
+        .status-error {
+            background: #fef0f0;
+            color: #F56C6C;
+        }
+        
+        .status-pending {
+            background: #f4f4f5;
+            color: #909399;
+        }
+        
+        .test-body {
+            padding: 20px;
+            background: white;
+            display: none;
+        }
+        
+        .test-body.show {
+            display: block;
+        }
+        
+        .test-info {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .test-label {
+            font-weight: 600;
+            color: #606266;
+        }
+        
+        .test-value {
+            color: #303133;
+        }
+        
+        .test-data {
+            background: #f5f7fa;
+            padding: 15px;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .test-data pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #303133;
+        }
+        
+        .summary {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+            padding: 20px 30px;
+            border-top: 1px solid #e4e7ed;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .summary-item {
+            flex: 1;
+        }
+        
+        .summary-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .summary-label {
+            font-size: 14px;
+            color: #606266;
+        }
+        
+        .success-value {
+            color: #67C23A;
+        }
+        
+        .error-value {
+            color: #F56C6C;
+        }
+        
+        .total-value {
+            color: #165DFF;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #909399;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f5f7fa;
+            border-top-color: #165DFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+        
+        .icon-success {
+            color: #67C23A;
+        }
+        
+        .icon-error {
+            color: #F56C6C;
+        }
+        
+        .icon-pending {
+            color: #909399;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 Mock服务测试</h1>
+            <p>验证Mock服务是否正常工作</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-primary" onclick="runAllTests()">▶️ 运行所有测试</button>
+            <button class="btn-secondary" onclick="runQuickTest()">⚡ 快速测试</button>
+            <button class="btn-danger" onclick="clearResults()">🗑️ 清除结果</button>
+            <div class="status" id="status">准备就绪</div>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="loading">
+                <p style="font-size: 18px; color: #909399;">点击"运行所有测试"开始测试</p>
+            </div>
+        </div>
+        
+        <div class="summary" id="summary" style="display: none;">
+            <div class="summary-item">
+                <div class="summary-value total-value" id="total">0</div>
+                <div class="summary-label">总测试数</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value success-value" id="passed">0</div>
+                <div class="summary-label">通过</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value error-value" id="failed">0</div>
+                <div class="summary-label">失败</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // 测试配置
+        const tests = [
+            {
+                id: 'test-1',
+                name: '获取网站配置',
+                url: '/api/config/site',
+                method: 'GET',
+                description: '测试网站基础配置接口'
+            },
+            {
+                id: 'test-2',
+                name: '获取轮播图列表',
+                url: '/api/config/banners',
+                method: 'GET',
+                description: '测试轮播图数据接口'
+            },
+            {
+                id: 'test-3',
+                name: '获取分类列表',
+                url: '/api/config/categories',
+                method: 'GET',
+                description: '测试分类数据接口'
+            },
+            {
+                id: 'test-4',
+                name: '获取公告列表',
+                url: '/api/config/announcements',
+                method: 'GET',
+                description: '测试公告数据接口'
+            },
+            {
+                id: 'test-5',
+                name: '获取热门资源',
+                url: '/api/content/hot-search?limit=10',
+                method: 'GET',
+                description: '测试热门资源接口'
+            },
+            {
+                id: 'test-6',
+                name: '获取推荐资源',
+                url: '/api/content/recommended?limit=10',
+                method: 'GET',
+                description: '测试推荐资源接口'
+            },
+            {
+                id: 'test-7',
+                name: '搜索资源',
+                url: '/api/content/search?keyword=UI',
+                method: 'GET',
+                description: '测试资源搜索接口'
+            },
+            {
+                id: 'test-8',
+                name: '获取资源列表',
+                url: '/api/content/resources?page=1&pageSize=12',
+                method: 'GET',
+                description: '测试资源列表接口'
+            }
+        ];
+
+        let testResults = [];
+
+        // 运行单个测试
+        async function runTest(test) {
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch(test.url, {
+                    method: test.method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                const data = await response.json();
+                
+                const result = {
+                    ...test,
+                    status: response.ok && data.code === 200 ? 'success' : 'error',
+                    httpStatus: response.status,
+                    responseCode: data.code,
+                    message: data.msg,
+                    data: data.data,
+                    duration: duration
+                };
+                
+                return result;
+            } catch (error) {
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                return {
+                    ...test,
+                    status: 'error',
+                    error: error.message,
+                    duration: duration
+                };
+            }
+        }
+
+        // 渲染测试结果
+        function renderResults() {
+            const resultsDiv = document.getElementById('results');
+            const summaryDiv = document.getElementById('summary');
+            
+            if (testResults.length === 0) {
+                resultsDiv.innerHTML = '<div class="loading"><p style="font-size: 18px; color: #909399;">暂无测试结果</p></div>';
+                summaryDiv.style.display = 'none';
+                return;
+            }
+            
+            const passed = testResults.filter(r => r.status === 'success').length;
+            const failed = testResults.filter(r => r.status === 'error').length;
+            
+            // 更新统计
+            document.getElementById('total').textContent = testResults.length;
+            document.getElementById('passed').textContent = passed;
+            document.getElementById('failed').textContent = failed;
+            summaryDiv.style.display = 'flex';
+            
+            // 渲染测试项
+            let html = '';
+            testResults.forEach(result => {
+                const icon = result.status === 'success' ? '✅' : '❌';
+                const statusClass = result.status === 'success' ? 'status-success' : 'status-error';
+                const statusText = result.status === 'success' ? '通过' : '失败';
+                
+                html += `
+                    <div class="test-item">
+                        <div class="test-header" onclick="toggleTestBody('${result.id}')">
+                            <div class="test-title">
+                                <span class="icon">${icon}</span>
+                                <span>${result.name}</span>
+                            </div>
+                            <div class="test-status ${statusClass}">${statusText}</div>
+                        </div>
+                        <div class="test-body" id="${result.id}-body">
+                            <div class="test-info">
+                                <div class="test-label">描述:</div>
+                                <div class="test-value">${result.description}</div>
+                                
+                                <div class="test-label">请求URL:</div>
+                                <div class="test-value">${result.url}</div>
+                                
+                                <div class="test-label">请求方法:</div>
+                                <div class="test-value">${result.method}</div>
+                                
+                                <div class="test-label">HTTP状态:</div>
+                                <div class="test-value">${result.httpStatus || 'N/A'}</div>
+                                
+                                <div class="test-label">响应码:</div>
+                                <div class="test-value">${result.responseCode || 'N/A'}</div>
+                                
+                                <div class="test-label">响应消息:</div>
+                                <div class="test-value">${result.message || result.error || 'N/A'}</div>
+                                
+                                <div class="test-label">耗时:</div>
+                                <div class="test-value">${result.duration}ms</div>
+                            </div>
+                            
+                            ${result.data ? `
+                                <div class="test-label" style="margin-bottom: 10px;">响应数据:</div>
+                                <div class="test-data">
+                                    <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // 切换测试详情显示
+        window.toggleTestBody = function(testId) {
+            const body = document.getElementById(`${testId}-body`);
+            body.classList.toggle('show');
+        };
+
+        // 运行所有测试
+        window.runAllTests = async function() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            statusDiv.textContent = '正在运行测试...';
+            resultsDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="font-size: 18px;">正在执行测试，请稍候...</p></div>';
+            
+            testResults = [];
+            
+            for (let i = 0; i < tests.length; i++) {
+                statusDiv.textContent = `正在测试 ${i + 1}/${tests.length}: ${tests[i].name}`;
+                const result = await runTest(tests[i]);
+                testResults.push(result);
+            }
+            
+            const passed = testResults.filter(r => r.status === 'success').length;
+            const failed = testResults.filter(r => r.status === 'error').length;
+            
+            statusDiv.textContent = `测试完成: ${passed} 通过, ${failed} 失败`;
+            renderResults();
+        };
+
+        // 快速测试（只测试关键接口）
+        window.runQuickTest = async function() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            statusDiv.textContent = '正在运行快速测试...';
+            resultsDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="font-size: 18px;">正在执行快速测试...</p></div>';
+            
+            testResults = [];
+            const quickTests = [tests[0], tests[1], tests[4]]; // 网站配置、轮播图、热门资源
+            
+            for (let i = 0; i < quickTests.length; i++) {
+                statusDiv.textContent = `正在测试 ${i + 1}/${quickTests.length}: ${quickTests[i].name}`;
+                const result = await runTest(quickTests[i]);
+                testResults.push(result);
+            }
+            
+            const passed = testResults.filter(r => r.status === 'success').length;
+            const failed = testResults.filter(r => r.status === 'error').length;
+            
+            statusDiv.textContent = `快速测试完成: ${passed} 通过, ${failed} 失败`;
+            renderResults();
+        };
+
+        // 清除结果
+        window.clearResults = function() {
+            testResults = [];
+            document.getElementById('status').textContent = '准备就绪';
+            renderResults();
+        };
+    </script>
+</body>
+</html>

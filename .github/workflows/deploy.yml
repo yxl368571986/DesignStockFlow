@@ -1,0 +1,456 @@
+name: CI/CD Pipeline
+
+# 触发条件
+on:
+  # 推送到main分支时触发
+  push:
+    branches:
+      - main
+      - develop
+  # Pull Request到main分支时触发
+  pull_request:
+    branches:
+      - main
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+
+# 环境变量
+env:
+  NODE_VERSION: '20.x'
+  PNPM_VERSION: '8.x'
+
+# 任务定义
+jobs:
+  # ==================== 代码质量检查 ====================
+  lint:
+    name: 代码质量检查
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 安装pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          
+      - name: 获取pnpm缓存目录
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+          
+      - name: 设置pnpm缓存
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+            
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        
+      - name: ESLint检查
+        run: pnpm run lint:check
+        
+      - name: Prettier格式检查
+        run: pnpm run format:check
+        
+      - name: TypeScript类型检查
+        run: pnpm run type-check
+
+  # ==================== 单元测试 ====================
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 安装pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          
+      - name: 获取pnpm缓存目录
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+          
+      - name: 设置pnpm缓存
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+            
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        
+      - name: 运行单元测试
+        run: pnpm run test
+        
+      - name: 生成测试覆盖率报告
+        run: pnpm run test:coverage
+        
+      - name: 上传覆盖率报告
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # ==================== 构建测试 ====================
+  build:
+    name: 构建测试
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      matrix:
+        environment: [development, production]
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 安装pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          
+      - name: 获取pnpm缓存目录
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+          
+      - name: 设置pnpm缓存
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+            
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        
+      - name: 创建环境变量文件
+        run: |
+          if [ "${{ matrix.environment }}" = "production" ]; then
+            echo "VITE_API_BASE_URL=${{ secrets.PROD_API_BASE_URL }}" > .env.production
+            echo "VITE_CDN_BASE_URL=${{ secrets.PROD_CDN_BASE_URL }}" >> .env.production
+            echo "VITE_APP_TITLE=星潮设计" >> .env.production
+            echo "VITE_APP_ENV=production" >> .env.production
+          else
+            echo "VITE_API_BASE_URL=${{ secrets.DEV_API_BASE_URL }}" > .env.development
+            echo "VITE_CDN_BASE_URL=${{ secrets.DEV_CDN_BASE_URL }}" >> .env.development
+            echo "VITE_APP_TITLE=星潮设计（开发）" >> .env.development
+            echo "VITE_APP_ENV=development" >> .env.development
+          fi
+        
+      - name: 构建项目
+        run: |
+          if [ "${{ matrix.environment }}" = "production" ]; then
+            pnpm run build:prod
+          else
+            pnpm run build:dev
+          fi
+        
+      - name: 检查构建产物
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "构建失败：dist目录不存在"
+            exit 1
+          fi
+          if [ ! -f "dist/index.html" ]; then
+            echo "构建失败：index.html不存在"
+            exit 1
+          fi
+          echo "构建成功，产物大小："
+          du -sh dist
+          
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.environment }}
+          path: dist/
+          retention-days: 7
+
+  # ==================== 部署到开发环境 ====================
+  deploy-dev:
+    name: 部署到开发环境
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'development')
+    environment:
+      name: development
+      url: https://dev.startide-design.com
+    
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-development
+          path: dist/
+          
+      - name: 部署到开发服务器
+        uses: easingthemes/ssh-deploy@v5
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.DEV_SERVER_HOST }}
+          REMOTE_USER: ${{ secrets.DEV_SERVER_USER }}
+          REMOTE_PORT: ${{ secrets.DEV_SERVER_PORT }}
+          SOURCE: "dist/"
+          TARGET: ${{ secrets.DEV_DEPLOY_PATH }}
+          EXCLUDE: "/node_modules/, /.git/"
+          SCRIPT_BEFORE: |
+            echo "开始部署到开发环境..."
+            whoami
+            ls -la
+          SCRIPT_AFTER: |
+            echo "部署完成，重启Nginx..."
+            sudo systemctl reload nginx
+            echo "开发环境部署成功！"
+            
+      - name: 健康检查
+        run: |
+          echo "等待服务启动..."
+          sleep 10
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://dev.startide-design.com)
+          if [ $response -eq 200 ]; then
+            echo "✅ 健康检查通过"
+          else
+            echo "❌ 健康检查失败，HTTP状态码: $response"
+            exit 1
+          fi
+          
+      - name: 发送部署通知
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            开发环境部署${{ job.status == 'success' && '成功' || '失败' }}
+            分支: ${{ github.ref }}
+            提交: ${{ github.sha }}
+            作者: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  # ==================== 部署到生产环境 ====================
+  deploy-prod:
+    name: 部署到生产环境
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://www.startide-design.com
+    
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-production
+          path: dist/
+          
+      - name: 部署到生产服务器
+        uses: easingthemes/ssh-deploy@v5
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.PROD_SERVER_HOST }}
+          REMOTE_USER: ${{ secrets.PROD_SERVER_USER }}
+          REMOTE_PORT: ${{ secrets.PROD_SERVER_PORT }}
+          SOURCE: "dist/"
+          TARGET: ${{ secrets.PROD_DEPLOY_PATH }}
+          EXCLUDE: "/node_modules/, /.git/"
+          SCRIPT_BEFORE: |
+            echo "开始部署到生产环境..."
+            # 备份当前版本
+            if [ -d "${{ secrets.PROD_DEPLOY_PATH }}" ]; then
+              backup_dir="${{ secrets.PROD_DEPLOY_PATH }}_backup_$(date +%Y%m%d_%H%M%S)"
+              echo "备份当前版本到: $backup_dir"
+              cp -r ${{ secrets.PROD_DEPLOY_PATH }} $backup_dir
+            fi
+          SCRIPT_AFTER: |
+            echo "部署完成，重启Nginx..."
+            sudo systemctl reload nginx
+            echo "生产环境部署成功！"
+            # 清理旧备份（保留最近5个）
+            cd $(dirname ${{ secrets.PROD_DEPLOY_PATH }})
+            ls -t | grep "_backup_" | tail -n +6 | xargs -r rm -rf
+            
+      - name: 健康检查
+        run: |
+          echo "等待服务启动..."
+          sleep 10
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://www.startide-design.com)
+          if [ $response -eq 200 ]; then
+            echo "✅ 健康检查通过"
+          else
+            echo "❌ 健康检查失败，HTTP状态码: $response"
+            exit 1
+          fi
+          
+      - name: 性能测试（Lighthouse）
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            https://www.startide-design.com
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          
+      - name: 发送部署通知
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            🚀 生产环境部署${{ job.status == 'success' && '成功' || '失败' }}
+            分支: ${{ github.ref }}
+            提交: ${{ github.sha }}
+            作者: ${{ github.actor }}
+            环境: https://www.startide-design.com
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          
+      - name: 创建GitHub Release
+        if: success() && github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## 🎉 生产环境发布
+            
+            **部署时间**: ${{ github.event.head_commit.timestamp }}
+            **提交信息**: ${{ github.event.head_commit.message }}
+            **提交作者**: ${{ github.actor }}
+            **提交SHA**: ${{ github.sha }}
+            
+            ### 变更内容
+            查看完整变更: https://github.com/${{ github.repository }}/compare/v${{ github.run_number - 1 }}...v${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+  # ==================== 安全扫描 ====================
+  security-scan:
+    name: 安全扫描
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        
+      - name: 设置Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: 安装pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+        
+      - name: 运行npm audit
+        run: pnpm audit --audit-level=moderate
+        continue-on-error: true
+        
+      - name: 依赖漏洞扫描
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+          
+      - name: 代码安全扫描
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, typescript
+          
+      - name: 执行CodeQL分析
+        uses: github/codeql-action/analyze@v3
+
+  # ==================== 性能监控 ====================
+  performance-check:
+    name: 性能检查
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-production
+          path: dist/
+          
+      - name: 安装Lighthouse CI
+        run: npm install -g @lhci/cli
+        
+      - name: 运行Lighthouse CI
+        run: lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          
+      - name: 检查包体积
+        run: |
+          echo "检查构建产物大小..."
+          total_size=$(du -sb dist | cut -f1)
+          max_size=$((200 * 1024 * 1024)) # 200MB
+          
+          if [ $total_size -gt $max_size ]; then
+            echo "❌ 构建产物过大: $(($total_size / 1024 / 1024))MB (限制: 200MB)"
+            exit 1
+          else
+            echo "✅ 构建产物大小合理: $(($total_size / 1024 / 1024))MB"
+          fi
+          
+          # 检查主要chunk大小
+          echo "主要chunk大小："
+          find dist/js -name "*.js" -type f -exec du -h {} \; | sort -rh | head -10

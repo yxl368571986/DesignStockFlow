@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="星潮设计 - 专业的设计资源分享平台，提供PSD、AI、CDR等设计文件下载" />
+    <meta name="keywords" content="设计资源,PSD,AI,CDR,素材下载,设计素材,UI设计,平面设计" />
+    
+    <!-- Content Security Policy - XSS防护 (开发环境宽松配置) -->
+    <!-- 注意: frame-ancestors 指令在 meta 标签中会被忽略，应该在 HTTP 响应头中设置 -->
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'self'; 
+                   script-src 'self' 'unsafe-inline' 'unsafe-eval'; 
+                   style-src 'self' 'unsafe-inline'; 
+                   img-src 'self' data: https: http:; 
+                   font-src 'self' data: https: http:; 
+                   connect-src 'self' http://localhost:* https://api.startide-design.com https://cdn.startide-design.com ws://localhost:*;">
+    
+    <!-- DNS Prefetch - 预解析域名 -->
+    <link rel="dns-prefetch" href="//api.startide-design.com" />
+    <link rel="dns-prefetch" href="//cdn.startide-design.com" />
+    <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="//fonts.gstatic.com" />
+    
+    <!-- Preconnect - 预连接关键域名 -->
+    <link rel="preconnect" href="https://api.startide-design.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.startide-design.com" crossorigin />
+    
+    <!-- Preload - 预加载关键资源 -->
+    <link rel="preload" href="/src/assets/styles/index.css" as="style" />
+    <link rel="modulepreload" href="/src/main.ts" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#165DFF" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="星潮设计" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="星潮设计 - 设计资源下载平台" />
+    <meta property="og:description" content="专业的设计资源分享平台，提供PSD、AI、CDR等设计文件下载" />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    
+    <title>星潮设计 - 设计资源下载平台</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

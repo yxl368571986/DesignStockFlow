@@ -1,0 +1,172 @@
+# ============================================================================
+# Logrotate 配置文件 - 星潮设计资源平台
+# ============================================================================
+# 
+# 功能：自动轮转、压缩和清理Nginx日志文件
+# 
+# 安装位置：/etc/logrotate.d/startide-design
+# 
+# 使用说明：
+# 1. 复制此文件到 /etc/logrotate.d/startide-design
+# 2. 确保文件权限正确: chmod 644 /etc/logrotate.d/startide-design
+# 3. 测试配置: logrotate -d /etc/logrotate.d/startide-design
+# 4. 手动执行: logrotate -f /etc/logrotate.d/startide-design
+# 
+# Logrotate会自动运行（通过cron），通常每天执行一次
+# 
+# ============================================================================
+
+# Nginx访问日志和错误日志
+/var/log/nginx/startide-design-*.log {
+    # 轮转频率：每天轮转一次
+    daily
+    
+    # 保留天数：保留30天的日志
+    rotate 30
+    
+    # 日志文件不存在时不报错
+    missingok
+    
+    # 空文件不轮转
+    notifempty
+    
+    # 压缩旧日志文件（使用gzip）
+    compress
+    
+    # 延迟压缩：下次轮转时才压缩（保留最近一天的未压缩日志）
+    delaycompress
+    
+    # 创建新日志文件的权限和所有者
+    # 格式：create <mode> <owner> <group>
+    create 0640 nginx nginx
+    
+    # 日期扩展名格式（例如：access.log-20231220）
+    dateext
+    dateformat -%Y%m%d
+    
+    # 所有日志轮转完后执行一次脚本（而不是每个文件执行一次）
+    sharedscripts
+    
+    # 轮转后执行的脚本
+    postrotate
+        # 检查Nginx是否在运行
+        if [ -f /var/run/nginx.pid ]; then
+            # 发送USR1信号让Nginx重新打开日志文件
+            kill -USR1 `cat /var/run/nginx.pid`
+        fi
+    endscript
+}
+
+# HTTP重定向日志（单独配置，保留时间更短）
+/var/log/nginx/startide-design-http-*.log {
+    daily
+    rotate 7          # 只保留7天
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 nginx nginx
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+    postrotate
+        if [ -f /var/run/nginx.pid ]; then
+            kill -USR1 `cat /var/run/nginx.pid`
+        fi
+    endscript
+}
+
+# API日志（单独配置，保留时间更长）
+/var/log/nginx/startide-design-api.log {
+    daily
+    rotate 90         # 保留90天（API日志更重要）
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 nginx nginx
+    dateext
+    dateformat -%Y%m%d
+    
+    # 大小限制：单个日志文件超过100MB时立即轮转
+    size 100M
+    
+    sharedscripts
+    postrotate
+        if [ -f /var/run/nginx.pid ]; then
+            kill -USR1 `cat /var/run/nginx.pid`
+        fi
+    endscript
+}
+
+# ============================================================================
+# 高级配置选项说明
+# ============================================================================
+# 
+# 轮转频率选项：
+# - daily: 每天
+# - weekly: 每周
+# - monthly: 每月
+# - yearly: 每年
+# 
+# 其他有用选项：
+# - maxage <days>: 删除超过指定天数的日志
+# - minsize <size>: 日志文件至少达到指定大小才轮转
+# - maxsize <size>: 日志文件超过指定大小立即轮转
+# - copytruncate: 复制日志文件后清空原文件（某些程序需要）
+# - nocreate: 不创建新日志文件
+# - olddir <directory>: 将旧日志移动到指定目录
+# - mail <address>: 轮转时发送邮件通知
+# - mailfirst: 发送轮转前的日志
+# - maillast: 发送轮转后的日志
+# 
+# 压缩选项：
+# - nocompress: 不压缩
+# - compresscmd <command>: 指定压缩命令（默认gzip）
+# - compressext <extension>: 压缩文件扩展名
+# - compressoptions <options>: 压缩命令选项
+# 
+# ============================================================================
+
+# ============================================================================
+# 测试和调试
+# ============================================================================
+# 
+# 测试配置（不实际执行）：
+# logrotate -d /etc/logrotate.d/startide-design
+# 
+# 强制执行轮转（用于测试）：
+# logrotate -f /etc/logrotate.d/startide-design
+# 
+# 查看logrotate状态：
+# cat /var/lib/logrotate/status
+# 
+# 手动触发Nginx重新打开日志：
+# nginx -s reopen
+# 或
+# kill -USR1 `cat /var/run/nginx.pid`
+# 
+# ============================================================================
+
+# ============================================================================
+# 常见问题排查
+# ============================================================================
+# 
+# 问题1：日志没有轮转
+# 解决：
+# - 检查logrotate是否在运行: systemctl status logrotate
+# - 检查cron是否正常: systemctl status cron
+# - 查看logrotate日志: grep logrotate /var/log/syslog
+# 
+# 问题2：轮转后Nginx继续写入旧文件
+# 解决：
+# - 确保postrotate脚本正确执行
+# - 手动执行: nginx -s reopen
+# 
+# 问题3：权限错误
+# 解决：
+# - 检查日志目录权限: ls -la /var/log/nginx/
+# - 检查nginx用户: ps aux | grep nginx
+# - 修改权限: chown -R nginx:nginx /var/log/nginx/
+# 
+# ============================================================================

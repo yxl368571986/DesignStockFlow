@@ -1,0 +1,688 @@
+设计资源下载网站（类似昵图网）前端开发文档
+文档核心说明
+1.适配目标：供 AI 直接解析生成可运行、高可用前端代码，无需额外人工解读模糊表述；
+2.核心诉求：界面美观有创意、操作极简易用、功能全面强大、技术栈安全高效、接口定义与实现完整；
+3.表述规范：采用「功能描述 + 技术参数 + 结构模板 + 代码示例」格式，明确类型、参数、逻辑，减少歧义。
+一、前端技术栈选型（安全 + 高效 + 美观）
+1. 核心技术栈（AI 直接引用，无需修改）
+技术类别	具体选型	选型核心价值（安全 / 高效 / 美观）
+基础框架	Vue 3 + Vite 5 + TypeScript 5.x	Vue 3 响应式性能更优，Vite 打包 / 热更新速度远超 Webpack；TypeScript 强类型约束减少代码漏洞，提升可维护性
+状态管理	Pinia 2.x	轻量无冗余，原生支持 TypeScript，比 Vuex 更高效，便于全局管理用户状态、资源缓存、权限信息
+UI 组件库	Element Plus + Tailwind CSS 3.x	Element Plus 提供丰富成熟的交互组件（弹窗、表单等），保证易用性；Tailwind CSS 快速实现创意美观样式，支持自定义主题
+路由管理	Vue Router 4.x	支持路由守卫、动态路由，便于控制权限访问（如 VIP 资源拦截），配合 TypeScript 提升路由安全性
+网络请求	Axios 1.x + axios-retry	封装请求 / 响应拦截器，支持请求重试、错误统一处理；自带防重复请求机制，提升接口调用安全性与稳定性
+安全辅助库	xss + js-cookie	xss 库过滤恶意输入，防范 XSS 攻击；js-cookie 安全操作 Cookie，避免本地存储泄露风险
+交互优化库	lazyload + nprogress	图片 / 资源懒加载，提升页面加载效率；nprogress 显示加载进度条，优化用户操作体验
+搜索辅助库	elasticsearch-js（可选）	配合后端 Elasticsearch，实现高效模糊搜索、关键词联想，提升资源查找便捷性
+2. 项目目录结构（AI 直接生成，规范清晰）
+plaintext
+src/
+├── api/                # 接口定义与实现（按模块分类）
+│   ├── user.ts         # 用户模块接口（登录、注册等）
+│   ├── resource.ts     # 资源模块接口（浏览、下载等）
+│   ├── upload.ts       # 上传模块接口（文件上传、校验等）
+│   ├── order.ts        # 订单/VIP模块接口（充值、会员查询等）
+│   └── index.ts        # 接口统一导出
+├── assets/             # 静态资源
+│   ├── images/         # 图片资源（logo、轮播图等）
+│   ├── styles/         # 全局样式（Tailwind自定义、主题样式）
+│   └── icons/          # 图标资源（svg/iconfont）
+├── components/         # 全局公共组件
+│   ├── Layout/         # 全局布局组件（头部、底部、侧边栏）
+│   ├── ResourceCard/   # 资源卡片组件（复用性强）
+│   ├── PagePagination/ # 分页组件
+│   ├── SearchInput/    # 搜索输入框（带联想）
+│   └── DownloadButton/ # 下载按钮（带权限校验）
+├── composables/        # 组合式函数（复用逻辑）
+│   ├── useAuth.ts      # 权限校验逻辑
+│   ├── useDownload.ts  # 文件下载逻辑
+│   ├── useRequest.ts   # 接口请求封装逻辑
+│   └── useToast.ts     # 消息提示逻辑
+├── pinia/              # Pinia状态管理
+│   ├── userStore.ts    # 用户状态（登录信息、权限）
+│   ├── resourceStore.ts # 资源状态（热门资源、缓存）
+│   └── index.ts        # 状态统一注册
+├── router/             # 路由配置
+│   ├── index.ts        # 路由注册、守卫配置
+│   └── routes.ts       # 路由规则定义
+├── types/              # TypeScript类型定义
+│   ├── user.d.ts       # 用户相关类型
+│   ├── resource.d.ts   # 资源相关类型
+│   ├── api.d.ts        # 接口请求/响应类型
+│   └── global.d.ts     # 全局类型
+├── views/              # 页面视图
+│   ├── Home/           # 首页
+│   ├── Login/          # 登录/注册页
+│   ├── Resource/       # 资源列表/详情页
+│   ├── Personal/       # 个人中心页（我的资源、下载记录）
+│   ├── Upload/         # 资源上传页
+│   ├── VIP/            # VIP会员页（套餐、充值）
+│   └── Admin/          # 管理员页（资源审核、用户管理）
+├── utils/              # 工具函数
+│   ├── request.ts      # Axios封装
+│   ├── format.ts       # 数据格式化（时间、文件大小）
+│   ├── validate.ts     # 输入校验（手机号、邮箱等）
+│   └── security.ts     # 安全工具（加密、XSS过滤）
+├── App.vue             # 根组件
+├── main.ts             # 入口文件
+└── vite-env.d.ts       # Vite环境类型声明
+二、界面设计与功能模块（美观 + 创意 + 易用）
+1. 全局布局设计（统一风格，操作便捷）
+（1）布局结构（AI 直接生成）
+整体布局：「顶部导航栏 + 中间内容区 + 底部信息区」，侧边分类栏（首页 / 资源页可展开 / 收起）
+顶部导航栏：Logo（左侧）+ 搜索框（居中，占比 40%，带联想下拉）+ 功能入口（右侧：登录 / 注册、个人中心、VIP 入口、上传按钮）
+中间内容区：自适应布局（移动端单列、平板双列、桌面四列），支持筛选条件悬浮固定（滚动时不消失）
+底部信息区：版权声明、联系方式、隐私政策、导航链接（快速跳转）
+视觉风格：主色调（蓝色 #165DFF，代表专业）+ 辅助色（橙色 #FF7D00，突出下载 / VIP 按钮），卡片圆角（8px）+ 悬浮阴影（hover 时阴影加深），渐变背景（顶部导航栏 / 轮播区）
+（2）响应式适配（全终端兼容）
+断点配置：移动端（<768px）、平板（768px-1200px）、桌面（>1200px）
+适配逻辑：移动端隐藏侧边分类栏，转为底部 Tab 栏；搜索框缩小为图标触发弹窗；资源卡片宽度 100%
+2. 核心功能模块（完整强大，操作极简）
+模块 1：首页（Home）
+功能描述：展示核心资源，引导用户快速查找，视觉吸睛
+视觉创意：顶部轮播图（自动切换，点击跳转对应资源分类）+ 分类快捷入口（图标 + 文字，彩色背景区分）+ 热门资源区（卡片布局，按下载量排序）+ 新品推荐区（按时间排序）+ VIP 专属资源区（带 VIP 标识，非会员点击跳转开通页）
+交互逻辑：
+i.轮播图：鼠标悬浮暂停，离开继续，支持手动切换
+ii.分类入口：点击直接筛选对应分类资源，悬浮显示分类描述
+iii.资源卡片：悬浮时放大 1.02 倍，显示「快速查看」「立即下载」按钮
+iv.懒加载：资源图片、新品推荐区内容滚动到可视区域再加载
+模块 2：用户登录 / 注册（Login）
+功能描述：支持账号密码登录、手机验证码登录、第三方登录（微信 / QQ），注册流程极简
+界面设计：左右分栏（左侧：创意插画 / 网站介绍，右侧：表单），表单带即时校验反馈
+交互逻辑：
+i.登录 / 注册切换：顶部 Tab 切换，无需跳转页面
+ii.验证码：点击「获取验证码」后倒计时（60s），自动禁用按钮，校验手机号格式后才允许发送
+iii.密码：支持显示 / 隐藏切换，校验密码强度（弱 / 中 / 强）
+iv.第三方登录：微信 / QQ 图标按钮，点击唤起对应授权弹窗
+v.记住密码：勾选后自动保存（加密存储在 Cookie，有效期 7 天）
+vi.错误提示：登录失败 / 验证码错误等信息，以轻提示形式显示（不弹窗，不打断操作）
+模块 3：资源列表 / 详情（Resource）
+功能描述：支持多条件筛选、精准 / 模糊搜索、资源详情查看、一键下载
+界面设计：
+i.筛选区：顶部悬浮（分类、格式、尺寸、上传时间、下载量排序），支持多选筛选
+ii.资源列表：卡片布局（图片 + 标题 + 格式 + 大小 + 下载量 + 上传者 + VIP 标识），分页展示
+iii.详情页：左侧资源预览（多图轮播）+ 右侧信息区（标题、详情描述、格式、大小、下载次数、上传时间、上传者信息）+ 底部下载按钮（突出显示）
+交互逻辑：
+i.搜索框：输入时实时联想关键词，回车 / 点击搜索按钮快速筛选，支持清空输入
+ii.筛选条件：选中后高亮显示，支持一键清空所有筛选条件
+iii.资源预览：详情页图片支持放大查看（点击放大，再次点击关闭）
+iv.下载按钮：
+普通用户：点击后校验登录状态（未登录跳转登录页），校验下载次数（超出限制提示开通 VIP）
+VIP 用户：点击后直接触发下载，显示下载进度条，下载完成后提示「下载成功，保存路径 xxx」
+资源权限：非 VIP 点击 VIP 资源，弹出 VIP 开通弹窗（展示套餐价格）
+模块 4：个人中心（Personal）
+功能描述：管理用户信息、下载记录、上传资源、VIP 状态
+界面设计：左侧侧边栏（导航菜单）+ 右侧内容区（切换不同功能）
+功能细分：
+i.个人信息：头像上传（裁剪功能）、昵称修改、手机号绑定、密码修改
+ii.下载记录：按时间排序展示下载过的资源，支持筛选（时间、分类）、再次下载
+iii.我的上传：展示用户上传的资源（待审核 / 已通过 / 已驳回），支持编辑、删除、查看审核状态
+iv.VIP 中心：显示当前 VIP 等级、到期时间，提供套餐续费 / 升级入口
+v.安全设置：绑定邮箱、开启二次验证、登录设备管理（下线异常设备）
+模块 5：资源上传（Upload）
+功能描述：支持单文件 / 多文件上传，格式校验，元信息填写，分片上传大文件
+界面设计：上传区域（虚线框 + 上传图标，支持拖拽上传）+ 文件列表（上传中 / 已完成 / 失败）+ 元信息表单
+交互逻辑：
+i.上传方式：点击上传 / 拖拽文件到上传区域，自动识别文件
+ii.文件校验：上传前校验格式（仅支持 PSD/AI/CDR 等设计格式）、大小（单个文件≤1000MB），不符合则提示错误
+iii.分片上传：文件＞100MB 自动分片，支持暂停 / 继续上传，断点续传
+iv.元信息填写：文件上传完成后，填写资源标题、分类、标签、详情描述，必填项标注红色 *，校验通过后才能提交
+v.提交审核：点击「提交审核」后，显示审核提示（「预计 1-2 个工作日审核完成」），跳转我的上传页
+模块 6：VIP 会员页（VIP）
+功能描述：展示 VIP 套餐，支持在线支付，开通 / 升级 VIP
+界面设计：套餐卡片（按月度 / 季度 / 年度区分，突出推荐套餐）+ 支付方式选择（微信 / 支付宝）
+交互逻辑：
+i.套餐选择：点击套餐卡片高亮选中，显示对应价格
+ii.支付方式：默认选中微信支付，支持切换支付宝，显示支付二维码（生成后倒计时，过期刷新）
+iii.支付成功：支付完成后自动刷新 VIP 状态，弹出成功提示，跳转个人中心 VIP 页面
+iv.支付失败：提示「支付失败，请重新尝试」，支持重新生成支付二维码
+3. 通用交互优化（提升易用性）
+1.消息提示：统一使用 Element Plus ElMessage，区分成功（绿色）、错误（红色）、提示（蓝色），自动消失（3s）
+2.加载状态：按钮点击后显示加载图标（禁用按钮），页面加载显示进度条（nprogress）
+3.返回顶部：滚动页面超过 500px 时，显示返回顶部按钮（点击平滑滚动到顶部）
+4.快捷键支持：搜索框聚焦（Ctrl+K）、提交表单（Enter）
+5.缓存优化：热门资源列表缓存 30 分钟（Pinia+localStorage），避免重复请求
+三、接口定义与实现（完整规范，AI 直接生成）
+1. 前置准备：Axios 封装（utils/request.ts）
+typescript
+运行
+// 要求AI生成以下完整代码，包含安全与高效配置import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';import axiosRetry from 'axios-retry';import { ElMessage, ElLoading } from 'element-plus';import { getToken, removeToken } from './security';import { useUserStore } from '@/pinia/userStore';import xss from 'xss';
+// 创建Axios实例const service = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL, // 环境变量配置接口基础地址
+  timeout: 10000, // 请求超时时间
+  headers: {
+    'Content-Type': 'application/json;charset=utf-8',
+    'X-Requested-With': 'XMLHttpRequest'
+  }});
+// 请求重试配置（网络错误时重试2次）axiosRetry(service, {
+  retries: 2,
+  retryDelay: (retryCount) => retryCount * 1000,
+  retryCondition: (error) => !error.response || error.response.status >= 500});
+// 加载状态实例let loadingInstance: ReturnType<typeof ElLoading.service> | null = null;
+// 请求拦截器
+service.interceptors.request.use(
+  (config: AxiosRequestConfig) => {
+    // 开启加载状态（排除上传接口，避免冲突）
+    if (config.headers?.showLoading !== false) {
+      loadingInstance = ElLoading.service({
+        lock: true,
+        text: '加载中...',
+        background: 'rgba(0,0,0,0.1)'
+      });
+    }
+
+    // 添加Token（用户登录后携带）
+    const token = getToken();
+    if (token && config.headers) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // XSS过滤请求参数（防止恶意输入）
+    if (config.method === 'get' && config.params) {
+      for (const key in config.params) {
+        if (typeof config.params[key] === 'string') {
+          config.params[key] = xss(config.params[key]);
+        }
+      }
+    }
+    if (config.method === 'post' && config.data && typeof config.data === 'object') {
+      for (const key in config.data) {
+        if (typeof config.data[key] === 'string') {
+          config.data[key] = xss(config.data[key]);
+        }
+      }
+    }
+
+    return config;
+  },
+  (error: AxiosError) => {
+    loadingInstance?.close();
+    ElMessage.error('请求初始化失败，请稍后重试');
+    return Promise.reject(error);
+  });
+// 响应拦截器
+service.interceptors.response.use(
+  (response: AxiosResponse) => {
+    loadingInstance?.close();
+    const res = response.data;
+
+    // 接口返回成功状态码（200）
+    if (res.code === 200) {
+      return res;
+    } else {
+      // 业务错误提示
+      ElMessage.error(res.msg || '请求失败，请稍后重试');
+      return Promise.reject(res);
+    }
+  },
+  (error: AxiosError) => {
+    loadingInstance?.close();
+    const errRes = error.response;
+
+    // 身份验证失败（401）：清除Token，跳转登录页
+    if (errRes?.status === 401) {
+      ElMessage.error('登录状态已过期，请重新登录');
+      removeToken();
+      const userStore = useUserStore();
+      userStore.resetUserState();
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+    }
+
+    // 权限不足（403）
+    else if (errRes?.status === 403) {
+      ElMessage.error('您暂无权限访问该资源，请开通VIP');
+    }
+
+    // 服务器错误（500）
+    else if (errRes?.status >= 500) {
+      ElMessage.error('服务器内部错误，请稍后重试');
+    }
+
+    // 其他错误
+    else {
+      ElMessage.error(error.message || '网络异常，请检查网络连接');
+    }
+
+    return Promise.reject(error);
+  });
+// 导出封装后的Axios实例export default service;
+2. 类型定义（types/api.d.ts + 模块类型）
+（1）全局接口类型（types/api.d.ts）
+typescript
+运行
+// AI直接生成，统一请求/响应类型/**
+ * 接口通用响应类型
+ */export interface ApiResponse<T = any> {
+  code: number; // 状态码：200成功，其他失败
+  msg: string; // 提示信息
+  data: T; // 响应数据
+  timestamp: number; // 时间戳}
+/**
+ * 分页查询参数通用类型
+ */export interface PageQueryParams {
+  pageNum: number; // 页码，默认1
+  pageSize: number; // 每页条数，默认10
+  keyword?: string; // 搜索关键词（可选）}
+/**
+ * 分页响应数据通用类型
+ */export interface PageResponse<T = any> {
+  list: T[]; // 数据列表
+  total: number; // 总条数
+  pageNum: number; // 当前页码
+  pageSize: number; // 每页条数
+  totalPages: number; // 总页数}
+（2）用户模块类型（types/user.d.ts）
+typescript
+运行
+/**
+ * 用户登录参数
+ */export interface LoginParams {
+  loginType: 'password' | 'sms'; // 登录类型：密码/短信
+  account: string; // 账号（手机号/邮箱）
+  password?: string; // 密码（登录类型为password时必填）
+  smsCode?: string; // 短信验证码（登录类型为sms时必填）
+  rememberMe: boolean; // 是否记住密码}
+/**
+ * 短信验证码参数
+ */export interface SmsCodeParams {
+  phone: string; // 手机号
+  type: 'register' | 'login' | 'forget'; // 验证码类型}
+/**
+ * 用户注册参数
+ */export interface RegisterParams {
+  phone: string; // 手机号
+  smsCode: string; // 短信验证码
+  password: string; // 密码
+  confirmPassword: string; // 确认密码
+  agree: boolean; // 是否同意用户协议}
+/**
+ * 用户信息类型
+ */export interface UserInfo {
+  userId: string; // 用户ID
+  nickname: string; // 昵称
+  avatar: string; // 头像
+  phone: string; // 手机号
+  email?: string; // 邮箱（可选）
+  vipLevel: 0 | 1 | 2 | 3; // VIP等级：0普通用户，1-VIP1，2-VIP2，3-VIP3
+  vipExpireTime: string; // VIP到期时间（格式：YYYY-MM-DD HH:mm:ss）
+  downloadCount: number; // 剩余免费下载次数
+  createTime: string; // 注册时间}
+/**
+ * 第三方登录参数
+ */export interface ThirdLoginParams {
+  platform: 'wechat' | 'qq'; // 第三方平台
+  code: string; // 第三方授权码}
+（3）资源模块类型（types/resource.d.ts）
+typescript
+运行
+/**
+ * 资源分类类型
+ */export interface ResourceCategory {
+  categoryId: string; // 分类ID
+  categoryName: string; // 分类名称
+  icon: string; // 分类图标
+  resourceCount: number; // 资源数量
+  sort: number; // 排序序号}
+/**
+ * 资源筛选参数
+ */export interface ResourceFilterParams extends PageQueryParams {
+  categoryId?: string; // 分类ID（可选）
+  format?: string; // 文件格式（可选，如PSD/AI）
+  sizeType?: string; // 尺寸类型（可选，如A4/高清）
+  sortType: 'download' | 'time'; // 排序类型：下载量/上传时间}
+/**
+ * 资源信息类型
+ */export interface ResourceInfo {
+  resourceId: string; // 资源ID
+  title: string; // 资源标题
+  cover: string; // 封面图片URL
+  format: string; // 文件格式
+  size: number; // 文件大小（字节）
+  sizeText: string; // 文件大小文本（如100MB）
+  downloadCount: number; // 下载次数
+  uploaderId: string; // 上传者ID
+  uploaderName: string; // 上传者昵称
+  vipLevel: 0 | 1 | 2 | 3; // 所需VIP等级（0为普通用户可下载）
+  categoryId: string; // 分类ID
+  categoryName: string; // 分类名称
+  tags: string[]; // 标签列表
+  createTime: string; // 上传时间
+  isAudit: 0 | 1 | 2; // 审核状态：0待审核，1已通过，2已驳回
+  auditMsg?: string; // 审核驳回原因（可选）}
+/**
+ * 资源详情类型（继承ResourceInfo，扩展详情字段）
+ */export interface ResourceDetail extends ResourceInfo {
+  description: string; // 资源详情描述（富文本）
+  previewImages: string[]; // 预览图片URL列表
+  downloadUrl: string; // 下载地址（带时效签名）}
+/**
+ * 资源下载参数
+ */export interface ResourceDownloadParams {
+  resourceId: string; // 资源ID}
+/**
+ * 下载记录类型
+ */export interface DownloadRecord {
+  recordId: string; // 记录ID
+  resourceId: string; // 资源ID
+  resourceTitle: string; // 资源标题
+  resourceCover: string; // 资源封面
+  downloadTime: string; // 下载时间
+  vipConsume: boolean; // 是否消耗VIP次数（true是，false否）}
+（4）上传模块类型（types/upload.d.ts）
+typescript
+运行
+/**
+ * 文件分片上传参数
+ */export interface ChunkUploadParams {
+  resourceId: string; // 资源唯一标识（前端生成）
+  chunkIndex: number; // 分片索引（从0开始）
+  totalChunks: number; // 总分片数
+  chunkSize: number; // 分片大小（字节）
+  file: Blob; // 分片文件
+  fileName: string; // 原文件名
+  fileSize: number; // 原文件大小（字节）
+  fileFormat: string; // 文件格式}
+/**
+ * 文件上传完成参数
+ */export interface UploadCompleteParams {
+  resourceId: string; // 资源唯一标识
+  fileName: string; // 原文件名
+  fileSize: number; // 文件大小（字节）
+  fileFormat: string; // 文件格式
+  title: string; // 资源标题
+  categoryId: string; // 分类ID
+  tags: string[]; // 标签列表
+  description: string; // 资源详情描述}
+/**
+ * 文件格式校验参数
+ */export interface FileValidateParams {
+  fileName: string; // 文件名
+  fileSize: number; // 文件大小（字节）}
+（5）订单模块类型（types/order.d.ts）
+typescript
+运行
+/**
+ * VIP套餐类型
+ */export interface VipPackage {
+  packageId: string; // 套餐ID
+  packageName: string; // 套餐名称（如VIP月卡）
+  vipLevel: 1 | 2 | 3; // 对应VIP等级
+  duration: number; // 有效期（天）
+  price: number; // 价格（元）
+  originalPrice: number; // 原价（元）
+  isRecommend: boolean; // 是否推荐
+  sort: number; // 排序序号}
+/**
+ * 订单创建参数
+ */export interface OrderCreateParams {
+  packageId: string; // 套餐ID
+  payType: 'wechat' | 'alipay'; // 支付方式}
+/**
+ * 订单信息类型
+ */export interface OrderInfo {
+  orderId: string; // 订单ID
+  packageName: string; // 套餐名称
+  vipLevel: 1 | 2 | 3; // VIP等级
+  duration: number; // 有效期（天）
+  price: number; // 支付金额（元）
+  payType: 'wechat' | 'alipay'; // 支付方式
+  orderStatus: 0 | 1 | 2 | 3; // 订单状态：0待支付，1已支付，2已取消，3已退款
+  createTime: string; // 订单创建时间
+  payTime?: string; // 支付时间（可选）
+  expireTime: string; // 订单过期时间
+  payUrl: string; // 支付链接/二维码地址}
+3. 接口实现（按模块分类，AI 直接生成）
+（1）用户模块接口（api/user.ts）
+typescript
+运行
+import service from '@/utils/request';import type {
+  ApiResponse,
+  LoginParams,
+  SmsCodeParams,
+  RegisterParams,
+  UserInfo,
+  ThirdLoginParams,
+  PageQueryParams,
+  PageResponse,
+  DownloadRecord} from '@/types';
+/**
+ * 用户登录
+ * @param params 登录参数
+ * @returns 登录结果（Token）
+ */export const userLogin = (params: LoginParams) => {
+  return service.post<ApiResponse<{ token: string }>>('/api/user/login', params);};
+/**
+ * 获取短信验证码
+ * @param params 短信验证码参数
+ * @returns 操作结果
+ */export const getSmsCode = (params: SmsCodeParams) => {
+  return service.post<ApiResponse>('/api/user/sms/code', params);};
+/**
+ * 用户注册
+ * @param params 注册参数
+ * @returns 操作结果
+ */export const userRegister = (params: RegisterParams) => {
+  return service.post<ApiResponse>('/api/user/register', params);};
+/**
+ * 获取用户信息
+ * @returns 用户信息
+ */export const getUserInfo = () => {
+  return service.get<ApiResponse<UserInfo>>('/api/user/info');};
+/**
+ * 修改用户信息
+ * @param params 用户信息（昵称/头像等）
+ * @returns 操作结果
+ */export const updateUserInfo = (params: Partial<Omit<UserInfo, 'userId' | 'createTime' | 'vipLevel' | 'vipExpireTime'>>) => {
+  return service.put<ApiResponse>('/api/user/info', params);};
+/**
+ * 修改用户密码
+ * @param params 密码参数（旧密码/新密码）
+ * @returns 操作结果
+ */export const updateUserPassword = (params: { oldPassword: string; newPassword: string; confirmPassword: string }) => {
+  return service.put<ApiResponse>('/api/user/password', params);};
+/**
+ * 第三方登录
+ * @param params 第三方登录参数
+ * @returns 登录结果（Token）
+ */export const thirdPartyLogin = (params: ThirdLoginParams) => {
+  return service.post<ApiResponse<{ token: string }>>('/api/user/third/login', params);};
+/**
+ * 获取用户下载记录
+ * @param params 分页查询参数
+ * @returns 下载记录分页数据
+ */export const getUserDownloadRecords = (params: PageQueryParams) => {
+  return service.get<ApiResponse<PageResponse<DownloadRecord>>>('/api/user/download/records', { params });};
+/**
+ * 用户退出登录
+ * @returns 操作结果
+ */export const userLogout = () => {
+  return service.post<ApiResponse>('/api/user/logout');};
+（2）资源模块接口（api/resource.ts）
+typescript
+运行
+import service from '@/utils/request';import type {
+  ApiResponse,
+  ResourceCategory,
+  ResourceFilterParams,
+  PageResponse,
+  ResourceInfo,
+  ResourceDetail,
+  ResourceDownloadParams} from '@/types';
+/**
+ * 获取资源分类列表
+ * @returns 分类列表
+ */export const getResourceCategories = () => {
+  return service.get<ApiResponse<ResourceCategory[]>>('/api/resource/categories');};
+/**
+ * 获取资源列表（带筛选/分页）
+ * @param params 筛选+分页参数
+ * @returns 资源分页数据
+ */export const getResourceList = (params: ResourceFilterParams) => {
+  return service.get<ApiResponse<PageResponse<ResourceInfo>>>('/api/resource/list', { params });};
+/**
+ * 获取热门资源列表
+ * @param limit 数量限制（默认10）
+ * @returns 热门资源列表
+ */export const getHotResourceList = (limit = 10) => {
+  return service.get<ApiResponse<ResourceInfo[]>>('/api/resource/hot', { params: { limit } });};
+/**
+ * 获取新品资源列表
+ * @param limit 数量限制（默认10）
+ * @returns 新品资源列表
+ */export const getNewResourceList = (limit = 10) => {
+  return service.get<ApiResponse<ResourceInfo[]>>('/api/resource/new', { params: { limit } });};
+/**
+ * 获取资源详情
+ * @param resourceId 资源ID
+ * @returns 资源详情
+ */export const getResourceDetail = (resourceId: string) => {
+  return service.get<ApiResponse<ResourceDetail>>(`/api/resource/detail/${resourceId}`);};
+/**
+ * 资源下载
+ * @param params 下载参数
+ * @returns 下载地址/操作结果
+ */export const downloadResource = (params: ResourceDownloadParams) => {
+  return service.post<ApiResponse<{ downloadUrl: string; expireTime: string }>>('/api/resource/download', params, {
+    headers: { showLoading: false } // 不显示全局加载，单独处理下载进度
+  });};
+/**
+ * 获取VIP专属资源列表
+ * @param params 分页查询参数
+ * @returns VIP资源分页数据
+ */export const getVipResourceList = (params: ResourceFilterParams) => {
+  return service.get<ApiResponse<PageResponse<ResourceInfo>>>('/api/resource/vip/list', { params });};
+（3）上传模块接口（api/upload.ts）
+typescript
+运行
+import service from '@/utils/request';import type { ApiResponse, ChunkUploadParams, UploadCompleteParams, FileValidateParams } from '@/types';
+/**
+ * 文件格式校验
+ * @param params 校验参数
+ * @returns 校验结果（是否允许上传）
+ */export const validateFileFormat = (params: FileValidateParams) => {
+  return service.post<ApiResponse<{ isValid: boolean; msg: string }>>('/api/upload/validate', params);};
+/**
+ * 文件分片上传
+ * @param params 分片上传参数
+ * @returns 分片上传结果
+ */export const uploadFileChunk = (params: ChunkUploadParams) => {
+  // 分片上传使用FormData格式
+  const formData = new FormData();
+  Object.entries(params).forEach(([key, value]) => {
+    formData.append(key, value as Blob | string | number);
+  });
+
+  return service.post<ApiResponse>('/api/upload/chunk', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      showLoading: false // 不显示全局加载，单独显示分片上传进度
+    },
+    timeout: 30000 // 分片上传超时时间延长至30秒
+  });};
+/**
+ * 文件上传完成（合并分片）
+ * @param params 上传完成参数
+ * @returns 上传结果（资源ID）
+ */export const completeFileUpload = (params: UploadCompleteParams) => {
+  return service.post<ApiResponse<{ resourceId: string }>>('/api/upload/complete', params);};
+/**
+ * 获取用户上传资源列表
+ * @param params 分页查询参数（可筛选审核状态）
+ * @returns 上传资源分页数据
+ */export const getUserUploadResources = (params: PageQueryParams & { auditStatus?: 0 | 1 | 2 }) => {
+  return service.get<ApiResponse<PageResponse<ResourceInfo>>>('/api/upload/list', { params });};
+/**
+ * 删除用户上传资源（待审核状态）
+ * @param resourceId 资源ID
+ * @returns 操作结果
+ */export const deleteUploadResource = (resourceId: string) => {
+  return service.delete<ApiResponse>(`/api/upload/delete/${resourceId}`);};
+/**
+ * 编辑上传资源信息（待审核状态）
+ * @param params 资源信息（标题/分类等）
+ * @returns 操作结果
+ */export const editUploadResource = (params: Partial<UploadCompleteParams> & { resourceId: string }) => {
+  return service.put<ApiResponse>('/api/upload/edit', params);};
+（4）订单 / VIP 模块接口（api/order.ts）
+typescript
+运行
+import service from '@/utils/request';import type { ApiResponse, VipPackage, OrderCreateParams, OrderInfo, PageQueryParams, PageResponse } from '@/types';
+/**
+ * 获取VIP套餐列表
+ * @returns 套餐列表
+ */export const getVipPackages = () => {
+  return service.get<ApiResponse<VipPackage[]>>('/api/order/vip/packages');};
+/**
+ * 创建VIP订单
+ * @param params 订单创建参数
+ * @returns 订单信息（含支付链接）
+ */export const createVipOrder = (params: OrderCreateParams) => {
+  return service.post<ApiResponse<OrderInfo>>('/api/order/create', params);};
+/**
+ * 查询订单详情
+ * @param orderId 订单ID
+ * @returns 订单详情
+ */export const getOrderDetail = (orderId: string) => {
+  return service.get<ApiResponse<OrderInfo>>(`/api/order/detail/${orderId}`);};
+/**
+ * 查询用户订单列表
+ * @param params 分页查询参数（可筛选订单状态）
+ * @returns 订单分页数据
+ */export const getUserOrderList = (params: PageQueryParams & { orderStatus?: 0 | 1 | 2 | 3 }) => {
+  return service.get<ApiResponse<PageResponse<OrderInfo>>>('/api/order/list', { params });};
+/**
+ * 取消未支付订单
+ * @param orderId 订单ID
+ * @returns 操作结果
+ */export const cancelOrder = (orderId: string) => {
+  return service.post<ApiResponse>(`/api/order/cancel/${orderId}`);};
+/**
+ * 刷新订单支付链接（订单过期后）
+ * @param orderId 订单ID
+ * @returns 新的支付链接
+ */export const refreshOrderPayUrl = (orderId: string) => {
+  return service.get<ApiResponse<{ payUrl: string; expireTime: string }>>(`/api/order/refresh/pay/${orderId}`);};
+（5）接口统一导出（api/index.ts）
+typescript
+运行
+// 用户模块export * from './user';// 资源模块export * from './resource';// 上传模块export * from './upload';// 订单/VIP模块export * from './order';
+四、安全与性能优化要求（AI 必须实现）
+1. 安全优化要求
+1.XSS 防护：所有用户输入（表单、搜索框）必须通过 xss 库过滤，禁止直接拼接 HTML 渲染；
+2.CSRF 防护：请求头携带 CSRF Token（后端生成，前端从 Cookie 获取后添加到请求头）；
+3.Token 安全：Token 存储在 HttpOnly Cookie 中，避免 localStorage 被窃取；请求头携带 Token，过期自动清除并跳转登录；
+4.输入校验：所有表单（登录 / 注册 / 上传）必须做前端校验（手机号格式、密码强度、必填项等），后端校验兜底；
+5.权限控制：路由守卫拦截未登录用户访问个人中心 / 上传页，拦截非 VIP 用户访问 VIP 资源；
+6.文件安全：上传文件前校验格式 / 大小，后端再次校验；下载链接使用带时效签名 URL，防止恶意盗用；
+7.敏感信息：用户密码加密存储（前端输入不明文传输），手机号 / 邮箱部分隐藏（如 138****1234）。
+2. 性能优化要求
+1.资源懒加载：图片使用 v-lazy 指令懒加载，组件使用 defineAsyncComponent 按需加载；
+2.接口缓存：热门资源、分类列表等使用 Pinia+localStorage 缓存，设置过期时间；
+3.减少请求：合并重复接口请求，使用 axios 取消重复请求（如快速切换分页时）；
+4.静态资源优化：图片压缩（使用 webp 格式），静态资源通过 CDN 分发，Vite 打包开启 Gzip 压缩；
+5.渲染优化：使用 v-memo 缓存不变组件，避免不必要的重渲染；长列表使用虚拟滚动（vue-virtual-scroller）；
+6.大文件处理：上传大文件时分片上传、断点续传，下载大文件时显示进度条。
+五、AI 代码生成提示
+1.严格按照本文档的技术栈、目录结构、接口定义生成代码，无需额外扩展无关功能；
+2.所有代码必须使用 TypeScript 编写，明确类型定义，避免 any 类型；
+3.界面样式需结合 Element Plus 与 Tailwind CSS，保证美观创意，符合文档描述的视觉风格；
+4.交互逻辑需简洁易用，实现文档中所有交互要求（如懒加载、下载进度、验证码倒计时等）；
+5.接口调用需使用封装后的 axios 实例，统一处理错误与加载状态；
+6.生成代码后，需保证可直接运行（仅需配置 VITE_API_BASE_URL 环境变量）；
+7.优先实现核心功能（首页、登录、资源列表 / 详情、下载、个人中心），再实现扩展功能（上传、VIP、管理员）。
+六、环境配置（.env.development/.env.production）
+plaintext
+# 开发环境（.env.development）
+VITE_API_BASE_URL = 'http://localhost:8080'
+VITE_CDN_BASE_URL = 'http://localhost:8080/cdn'
+
+# 生产环境（.env.production）
+VITE_API_BASE_URL = 'https://api.your-design-website.com'
+VITE_CDN_BASE_URL = 'https://cdn.your-design-website.com'
+总结
+1.本文档为 AI 量身定制，结构清晰、参数明确，可直接生成符合要求的前端代码；
+2.覆盖「美观创意 + 易用便捷 + 安全高效 + 功能完整」的核心需求，包含完整接口定义与实现；
+3.技术栈选型兼顾安全性与高效性，界面设计符合现代审美，操作流程极简；
+4.只需配置环境变量，即可快速运行项目，后期可根据业务需求扩展功能。

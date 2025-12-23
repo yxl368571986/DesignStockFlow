@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>离线模式 - 星潮设计</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #165DFF 0%, #FF7D00 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .offline-container {
+      background: white;
+      border-radius: 16px;
+      padding: 48px 32px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .offline-icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 24px;
+      background: linear-gradient(135deg, #165DFF 0%, #FF7D00 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: #1d2129;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    p {
+      font-size: 16px;
+      color: #4e5969;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .retry-button {
+      background: linear-gradient(135deg, #165DFF 0%, #FF7D00 100%);
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
+    }
+
+    .retry-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(22, 93, 255, 0.4);
+    }
+
+    .retry-button:active {
+      transform: translateY(0);
+    }
+
+    .tips {
+      margin-top: 32px;
+      padding-top: 32px;
+      border-top: 1px solid #e5e6eb;
+    }
+
+    .tips h3 {
+      font-size: 16px;
+      color: #1d2129;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .tips ul {
+      list-style: none;
+      text-align: left;
+      color: #4e5969;
+      font-size: 14px;
+    }
+
+    .tips li {
+      padding: 8px 0;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .tips li:before {
+      content: "•";
+      position: absolute;
+      left: 8px;
+      color: #165DFF;
+      font-weight: bold;
+    }
+
+    @media (max-width: 640px) {
+      .offline-container {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .offline-icon {
+        width: 100px;
+        height: 100px;
+        font-size: 48px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">
+      📡
+    </div>
+    <h1>当前网络不可用</h1>
+    <p>您似乎已断开网络连接，请检查您的网络设置后重试。</p>
+    <button class="retry-button" onclick="location.reload()">
+      重新连接
+    </button>
+
+    <div class="tips">
+      <h3>可能的原因：</h3>
+      <ul>
+        <li>网络连接已断开</li>
+        <li>WiFi或移动数据已关闭</li>
+        <li>路由器或调制解调器未连接</li>
+        <li>服务器暂时无法访问</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // 监听网络状态变化
+    window.addEventListener('online', function() {
+      location.reload();
+    });
+
+    // 定期检查网络状态
+    setInterval(function() {
+      if (navigator.onLine) {
+        location.reload();
+      }
+    }, 5000);
+  </script>
+</body>
+</html>

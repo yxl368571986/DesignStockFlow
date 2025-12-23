@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model admin_operation_logs {
+  log_id                                           String   @id @default(uuid()) @db.VarChar(36)
+  operator_id                                      String   @db.VarChar(36)
+  target_user_id                                   String   @db.VarChar(36)
+  action                                           String   @db.VarChar(50)
+  description                                      String
+  created_at                                       DateTime @default(now()) @db.Timestamp(6)
+  users_admin_operation_logs_operator_idTousers    users    @relation("admin_operation_logs_operator_idTousers", fields: [operator_id], references: [user_id])
+  users_admin_operation_logs_target_user_idTousers users    @relation("admin_operation_logs_target_user_idTousers", fields: [target_user_id], references: [user_id])
+
+  @@index([created_at(sort: Desc)])
+  @@index([operator_id])
+  @@index([target_user_id])
+}
+
+model announcements {
+  announcement_id String    @id @default(uuid()) @db.VarChar(36)
+  title           String    @db.VarChar(200)
+  content         String
+  type            String    @default("normal") @db.VarChar(20)
+  link_url        String?   @db.VarChar(500)
+  is_top          Boolean   @default(false)
+  start_time      DateTime? @db.Timestamp(6)
+  end_time        DateTime? @db.Timestamp(6)
+  status          Int       @default(1)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([is_top])
+  @@index([status])
+}
+
+model audit_logs {
+  log_id      String     @id @default(uuid()) @db.VarChar(36)
+  resource_id String?    @db.VarChar(36)
+  auditor_id  String?    @db.VarChar(36)
+  action      String     @db.VarChar(20)
+  reason      String?
+  created_at  DateTime   @default(now()) @db.Timestamp(6)
+  users       users?     @relation(fields: [auditor_id], references: [user_id])
+  resources   resources? @relation(fields: [resource_id], references: [resource_id])
+
+  @@index([auditor_id])
+  @@index([resource_id])
+}
+
+model banners {
+  banner_id  String    @id @default(uuid()) @db.VarChar(36)
+  title      String    @db.VarChar(100)
+  image_url  String    @db.VarChar(500)
+  link_url   String?   @db.VarChar(500)
+  link_type  String?   @db.VarChar(20)
+  sort_order Int       @default(0)
+  start_time DateTime? @db.Timestamp(6)
+  end_time   DateTime? @db.Timestamp(6)
+  status     Int       @default(1)
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([sort_order])
+  @@index([status])
+}
+
+model categories {
+  category_id      String       @id @default(uuid()) @db.VarChar(36)
+  category_name    String       @db.VarChar(50)
+  category_code    String       @unique @db.VarChar(50)
+  parent_id        String?      @db.VarChar(36)
+  icon             String?      @db.VarChar(500)
+  sort_order       Int          @default(0)
+  is_hot           Boolean      @default(false)
+  is_recommend     Boolean      @default(false)
+  resource_count   Int          @default(0)
+  created_at       DateTime     @default(now()) @db.Timestamp(6)
+  updated_at       DateTime     @default(now()) @db.Timestamp(6)
+  categories       categories?  @relation("categoriesTocategories", fields: [parent_id], references: [category_id])
+  other_categories categories[] @relation("categoriesTocategories")
+  resources        resources[]
+
+  @@index([parent_id])
+  @@index([sort_order])
+}
+
+model daily_tasks {
+  task_id       String       @id @default(uuid()) @db.VarChar(36)
+  task_name     String       @db.VarChar(50)
+  task_code     String       @unique @db.VarChar(50)
+  task_type     String       @db.VarChar(20)
+  points_reward Int
+  target_count  Int          @default(1)
+  description   String?
+  is_enabled    Boolean      @default(true)
+  sort_order    Int          @default(0)
+  created_at    DateTime     @default(now()) @db.Timestamp(6)
+  updated_at    DateTime     @default(now()) @db.Timestamp(6)
+  user_tasks    user_tasks[]
+}
+
+model download_history {
+  download_id String     @id @default(uuid()) @db.VarChar(36)
+  user_id     String?    @db.VarChar(36)
+  resource_id String?    @db.VarChar(36)
+  points_cost Int        @default(0)
+  ip_address  String?    @db.VarChar(50)
+  user_agent  String?
+  created_at  DateTime   @default(now()) @db.Timestamp(6)
+  resources   resources? @relation(fields: [resource_id], references: [resource_id])
+  users       users?     @relation(fields: [user_id], references: [user_id])
+
+  @@index([created_at(sort: Desc)])
+  @@index([resource_id])
+  @@index([user_id])
+}
+
+model orders {
+  order_id       String    @id @default(uuid()) @db.VarChar(36)
+  order_no       String    @unique @db.VarChar(50)
+  user_id        String?   @db.VarChar(36)
+  order_type     String    @db.VarChar(20)
+  product_type   String    @db.VarChar(20)
+  product_name   String    @db.VarChar(100)
+  amount         Decimal   @db.Decimal(10, 2)
+  payment_method String?   @db.VarChar(20)
+  payment_status Int       @default(0)
+  transaction_id String?   @db.VarChar(100)
+  paid_at        DateTime? @db.Timestamp(6)
+  created_at     DateTime  @default(now()) @db.Timestamp(6)
+  updated_at     DateTime  @default(now()) @db.Timestamp(6)
+  users          users?    @relation(fields: [user_id], references: [user_id])
+
+  @@index([order_no])
+  @@index([order_type])
+  @@index([payment_status])
+  @@index([user_id])
+}
+
+model permissions {
+  permission_id    String             @id @default(uuid()) @db.VarChar(36)
+  permission_name  String             @db.VarChar(50)
+  permission_code  String             @unique @db.VarChar(50)
+  module           String             @db.VarChar(50)
+  description      String?
+  created_at       DateTime           @default(now()) @db.Timestamp(6)
+  role_permissions role_permissions[]
+}
+
+model points_exchange_records {
+  exchange_id      String           @id @default(uuid()) @db.VarChar(36)
+  user_id          String?          @db.VarChar(36)
+  product_id       String?          @db.VarChar(36)
+  product_name     String           @db.VarChar(100)
+  product_type     String           @db.VarChar(20)
+  points_cost      Int
+  delivery_status  Int              @default(0)
+  delivery_address String?
+  tracking_number  String?          @db.VarChar(100)
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime         @default(now()) @db.Timestamp(6)
+  points_products  points_products? @relation(fields: [product_id], references: [product_id])
+  users            users?           @relation(fields: [user_id], references: [user_id])
+
+  @@index([delivery_status])
+  @@index([user_id])
+}
+
+model points_products {
+  product_id              String                    @id @default(uuid()) @db.VarChar(36)
+  product_name            String                    @db.VarChar(100)
+  product_type            String                    @db.VarChar(20)
+  product_code            String                    @unique @db.VarChar(50)
+  points_required         Int
+  product_value           String?
+  stock                   Int                       @default(-1)
+  image_url               String?                   @db.VarChar(500)
+  description             String?
+  sort_order              Int                       @default(0)
+  status                  Int                       @default(1)
+  created_at              DateTime                  @default(now()) @db.Timestamp(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamp(6)
+  points_exchange_records points_exchange_records[]
+
+  @@index([product_type])
+  @@index([status])
+}
+
+model points_records {
+  record_id      String   @id @default(uuid()) @db.VarChar(36)
+  user_id        String?  @db.VarChar(36)
+  points_change  Int
+  points_balance Int
+  change_type    String   @db.VarChar(20)
+  source         String   @db.VarChar(50)
+  source_id      String?  @db.VarChar(36)
+  description    String?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  users          users?   @relation(fields: [user_id], references: [user_id])
+
+  @@index([change_type])
+  @@index([created_at(sort: Desc)])
+  @@index([user_id])
+}
+
+model points_rules {
+  rule_id      String   @id @default(uuid()) @db.VarChar(36)
+  rule_name    String   @db.VarChar(50)
+  rule_code    String   @unique @db.VarChar(50)
+  rule_type    String   @db.VarChar(20)
+  points_value Int
+  description  String?
+  is_enabled   Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  updated_at   DateTime @default(now()) @db.Timestamp(6)
+}
+
+model resources {
+  resource_id                       String             @id @default(uuid()) @db.VarChar(36)
+  title                             String             @db.VarChar(200)
+  description                       String?
+  cover                             String?            @db.VarChar(500)
+  file_url                          String             @db.VarChar(500)
+  file_name                         String             @db.VarChar(255)
+  file_size                         BigInt
+  file_format                       String             @db.VarChar(20)
+  preview_images                    String[]
+  category_id                       String?            @db.VarChar(36)
+  tags                              String[]
+  vip_level                         Int                @default(0)
+  user_id                           String?            @db.VarChar(36)
+  audit_status                      Int                @default(0)
+  audit_msg                         String?
+  auditor_id                        String?            @db.VarChar(36)
+  audited_at                        DateTime?          @db.Timestamp(6)
+  download_count                    Int                @default(0)
+  view_count                        Int                @default(0)
+  like_count                        Int                @default(0)
+  collect_count                     Int                @default(0)
+  is_top                            Boolean            @default(false)
+  is_recommend                      Boolean            @default(false)
+  status                            Int                @default(1)
+  created_at                        DateTime           @default(now()) @db.Timestamp(6)
+  updated_at                        DateTime           @default(now()) @db.Timestamp(6)
+  audit_logs                        audit_logs[]
+  download_history                  download_history[]
+  users_resources_auditor_idTousers users?             @relation("resources_auditor_idTousers", fields: [auditor_id], references: [user_id])
+  categories                        categories?        @relation(fields: [category_id], references: [category_id])
+  users_resources_user_idTousers    users?             @relation("resources_user_idTousers", fields: [user_id], references: [user_id])
+  user_favorites                    user_favorites[]
+
+  @@index([audit_status])
+  @@index([category_id])
+  @@index([collect_count(sort: Desc)])
+  @@index([created_at(sort: Desc)])
+  @@index([download_count(sort: Desc)])
+  @@index([like_count(sort: Desc)])
+  @@index([status])
+  @@index([user_id])
+  @@index([vip_level])
+}
+
+model role_permissions {
+  role_id       String      @db.VarChar(36)
+  permission_id String      @db.VarChar(36)
+  created_at    DateTime    @default(now()) @db.Timestamp(6)
+  permissions   permissions @relation(fields: [permission_id], references: [permission_id], onDelete: Cascade)
+  roles         roles       @relation(fields: [role_id], references: [role_id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@index([permission_id])
+  @@index([role_id])
+}
+
+model roles {
+  role_id          String             @id @default(uuid()) @db.VarChar(36)
+  role_name        String             @unique @db.VarChar(50)
+  role_code        String             @unique @db.VarChar(50)
+  description      String?
+  created_at       DateTime           @default(now()) @db.Timestamp(6)
+  updated_at       DateTime           @default(now()) @db.Timestamp(6)
+  role_permissions role_permissions[]
+  users            users[]
+}
+
+model system_config {
+  config_id    String   @id @default(uuid()) @db.VarChar(36)
+  config_key   String   @unique @db.VarChar(100)
+  config_value String
+  config_type  String   @db.VarChar(20)
+  description  String?
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  updated_at   DateTime @default(now()) @db.Timestamp(6)
+}
+
+model user_favorites {
+  favorite_id String    @id @default(uuid()) @db.VarChar(36)
+  user_id     String    @db.VarChar(36)
+  resource_id String    @db.VarChar(36)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  resources   resources @relation(fields: [resource_id], references: [resource_id], onDelete: Cascade)
+  users       users     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([user_id, resource_id])
+  @@index([created_at(sort: Desc)])
+  @@index([resource_id])
+  @@index([user_id])
+}
+
+model user_tasks {
+  record_id       String       @id @default(uuid()) @db.VarChar(36)
+  user_id         String?      @db.VarChar(36)
+  task_id         String?      @db.VarChar(36)
+  task_code       String       @db.VarChar(50)
+  completed_count Int          @default(0)
+  target_count    Int
+  is_completed    Boolean      @default(false)
+  task_date       DateTime     @db.Date
+  completed_at    DateTime?    @db.Timestamp(6)
+  created_at      DateTime     @default(now()) @db.Timestamp(6)
+  updated_at      DateTime     @default(now()) @db.Timestamp(6)
+  daily_tasks     daily_tasks? @relation(fields: [task_id], references: [task_id])
+  users           users?       @relation(fields: [user_id], references: [user_id])
+
+  @@unique([user_id, task_id, task_date])
+  @@index([is_completed])
+  @@index([task_date])
+  @@index([user_id])
+}
+
+model users {
+  user_id                                                         String                    @id @default(uuid()) @db.VarChar(36)
+  phone                                                           String                    @unique @db.VarChar(20)
+  password_hash                                                   String                    @db.VarChar(255)
+  nickname                                                        String?                   @db.VarChar(50)
+  avatar                                                          String?                   @db.VarChar(500)
+  email                                                           String?                   @db.VarChar(100)
+  bio                                                             String?
+  vip_level                                                       Int                       @default(0)
+  vip_expire_at                                                   DateTime?                 @db.Timestamp(6)
+  points_balance                                                  Int                       @default(0)
+  points_total                                                    Int                       @default(0)
+  user_level                                                      Int                       @default(1)
+  role_id                                                         String?                   @db.VarChar(36)
+  status                                                          Int                       @default(1)
+  created_at                                                      DateTime                  @default(now()) @db.Timestamp(6)
+  updated_at                                                      DateTime                  @default(now()) @db.Timestamp(6)
+  last_login_at                                                   DateTime?                 @db.Timestamp(6)
+  admin_operation_logs_admin_operation_logs_operator_idTousers    admin_operation_logs[]    @relation("admin_operation_logs_operator_idTousers")
+  admin_operation_logs_admin_operation_logs_target_user_idTousers admin_operation_logs[]    @relation("admin_operation_logs_target_user_idTousers")
+  audit_logs                                                      audit_logs[]
+  download_history                                                download_history[]
+  orders                                                          orders[]
+  points_exchange_records                                         points_exchange_records[]
+  points_records                                                  points_records[]
+  resources_resources_auditor_idTousers                           resources[]               @relation("resources_auditor_idTousers")
+  resources_resources_user_idTousers                              resources[]               @relation("resources_user_idTousers")
+  user_favorites                                                  user_favorites[]
+  user_tasks                                                      user_tasks[]
+  roles                                                           roles?                    @relation(fields: [role_id], references: [role_id])
+
+  @@index([phone])
+  @@index([role_id])
+  @@index([status])
+  @@index([user_level])
+  @@index([vip_level])
+}
+
+model vip_packages {
+  package_id     String   @id @default(uuid()) @db.VarChar(36)
+  package_name   String   @db.VarChar(50)
+  package_code   String   @unique @db.VarChar(50)
+  duration_days  Int
+  original_price Decimal  @db.Decimal(10, 2)
+  current_price  Decimal  @db.Decimal(10, 2)
+  description    String?
+  sort_order     Int      @default(0)
+  status         Int      @default(1)
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([sort_order])
+  @@index([status])
+}
+
+model vip_privileges {
+  privilege_id    String   @id @default(uuid()) @db.VarChar(36)
+  privilege_name  String   @db.VarChar(50)
+  privilege_code  String   @unique @db.VarChar(50)
+  privilege_type  String   @db.VarChar(20)
+  privilege_value String
+  description     String?
+  is_enabled      Boolean  @default(true)
+  sort_order      Int      @default(0)
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([is_enabled])
+}

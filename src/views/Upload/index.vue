@@ -532,10 +532,10 @@ onMounted(async () => {
                 v-model="formData.vipLevel"
                 :disabled="isUploading"
               >
-                <el-radio :label="0">
+                <el-radio :value="0">
                   免费资源
                 </el-radio>
-                <el-radio :label="1">
+                <el-radio :value="1">
                   VIP专属
                 </el-radio>
               </el-radio-group>

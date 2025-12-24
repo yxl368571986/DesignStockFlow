@@ -27,16 +27,16 @@
           v-model="dateRange"
           @change="handleDateRangeChange"
         >
-          <el-radio-button label="7">
+          <el-radio-button value="7">
             最近7天
           </el-radio-button>
-          <el-radio-button label="30">
+          <el-radio-button value="30">
             最近30天
           </el-radio-button>
-          <el-radio-button label="90">
+          <el-radio-button value="90">
             最近90天
           </el-radio-button>
-          <el-radio-button label="custom">
+          <el-radio-button value="custom">
             自定义
           </el-radio-button>
         </el-radio-group>

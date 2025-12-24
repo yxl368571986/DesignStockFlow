@@ -79,7 +79,13 @@ export function getResourceList(
       pageSize
     });
   }
-  return get<PageResponse<ResourceInfo>>('/resources', params);
+  // 将前端的sortType转换为后端期望的sortBy参数
+  const { sortType, ...restParams } = params;
+  const apiParams = {
+    ...restParams,
+    sortBy: sortType || 'comprehensive'
+  };
+  return get<PageResponse<ResourceInfo>>('/resources', apiParams);
 }
 
 /**
@@ -124,7 +130,8 @@ export async function getHotResources(limit: number = 10): Promise<ApiResponse<R
     return mockResponse(sorted.slice(0, limit));
   }
   // 实际API返回PageResponse，需要提取list
-  const response = await get<PageResponse<ResourceInfo>>('/resources', { sortType: 'download', pageSize: limit });
+  // 使用sortBy参数（后端期望的参数名）
+  const response = await get<PageResponse<ResourceInfo>>('/resources', { sortBy: 'download', pageSize: limit });
   return {
     ...response,
     data: response.data?.list || []
@@ -142,7 +149,8 @@ export async function getRecommendedResources(limit: number = 10): Promise<ApiRe
     return mockResponse(sorted.slice(0, limit));
   }
   // 实际API返回PageResponse，需要提取list
-  const response = await get<PageResponse<ResourceInfo>>('/resources', { isRecommend: true, pageSize: limit });
+  // 使用sortBy参数（后端期望的参数名）
+  const response = await get<PageResponse<ResourceInfo>>('/resources', { isRecommend: true, sortBy: 'comprehensive', pageSize: limit });
   return {
     ...response,
     data: response.data?.list || []

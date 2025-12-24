@@ -15,6 +15,10 @@ import {
   getAllVipPrivileges,
   updateVipPrivilege,
   adjustUserVip,
+  getVipOrders,
+  getVipOrderById,
+  refundVipOrder,
+  getVipStatistics,
 } from '@/controllers/vipController.js';
 import { authenticate as authenticateToken } from '@/middlewares/auth.js';
 
@@ -58,10 +62,16 @@ router.put('/admin/privileges/:privilegeId', authenticateToken, updateVipPrivile
 // PUT /api/v1/admin/users/:userId/vip - 手动调整用户VIP（管理员）
 router.put('/admin/users/:userId/vip', authenticateToken, adjustUserVip);
 
-// 以下功能暂未实现
-// router.get('/admin/orders', authenticateToken, getVipOrders);
-// router.get('/admin/orders/:orderId', authenticateToken, getVipOrderById);
-// router.post('/admin/orders/:orderId/refund', authenticateToken, refundVipOrder);
-// router.get('/admin/statistics', authenticateToken, getVipStatistics);
+// GET /api/v1/vip/admin/orders - 获取VIP订单列表（管理员）
+router.get('/admin/orders', authenticateToken, getVipOrders);
+
+// GET /api/v1/vip/admin/orders/:orderId - 获取VIP订单详情（管理员）
+router.get('/admin/orders/:orderId', authenticateToken, getVipOrderById);
+
+// POST /api/v1/vip/admin/orders/:orderId/refund - VIP订单退款（管理员）
+router.post('/admin/orders/:orderId/refund', authenticateToken, refundVipOrder);
+
+// GET /api/v1/vip/admin/statistics - 获取VIP统计数据（管理员）
+router.get('/admin/statistics', authenticateToken, getVipStatistics);
 
 export default router;

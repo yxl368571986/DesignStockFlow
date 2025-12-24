@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
-import { User, Upload, Download, Setting, Coin } from '@element-plus/icons-vue';
+import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
 import SearchBar from '@/components/business/SearchBar.vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
@@ -353,7 +353,8 @@ onBeforeUnmount(() => {
           @click="toggleSidebar"
         >
           <el-icon>
-            <component :is="sidebarCollapsed ? 'ArrowRight' : 'ArrowLeft'" />
+            <ArrowRight v-if="sidebarCollapsed" />
+            <ArrowLeft v-else />
           </el-icon>
         </div>
 

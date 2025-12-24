@@ -59,7 +59,7 @@ const tempSelectedCategoryId = ref<string | undefined>(undefined);
  * 支持的文件格式列表
  */
 const formatOptions = [
-  { label: '全部格式', value: undefined },
+  { label: '全部格式', value: '' },
   { label: 'PSD', value: 'PSD' },
   { label: 'AI', value: 'AI' },
   { label: 'CDR', value: 'CDR' },
@@ -76,7 +76,7 @@ const formatOptions = [
  * VIP等级选项
  */
 const vipLevelOptions = [
-  { label: '全部资源', value: undefined },
+  { label: '全部资源', value: -1 },
   { label: '免费资源', value: 0 },
   { label: 'VIP资源', value: 1 }
 ];
@@ -264,8 +264,10 @@ function handleHotCategoryClick(categoryId: string | undefined) {
  * 处理格式变化
  */
 function handleFormatChange(format: string | undefined) {
-  filters.value.format = format;
-  resourceStore.setFormat(format);
+  // 空字符串表示"全部格式"，转换为undefined
+  const actualFormat = format === '' ? undefined : format;
+  filters.value.format = actualFormat;
+  resourceStore.setFormat(actualFormat);
   updateURL();
 }
 
@@ -273,8 +275,10 @@ function handleFormatChange(format: string | undefined) {
  * 处理VIP等级变化
  */
 function handleVipLevelChange(vipLevel: number | undefined) {
-  filters.value.vipLevel = vipLevel;
-  resourceStore.setVipLevel(vipLevel);
+  // -1表示"全部资源"，转换为undefined
+  const actualVipLevel = vipLevel === -1 ? undefined : vipLevel;
+  filters.value.vipLevel = actualVipLevel;
+  resourceStore.setVipLevel(actualVipLevel);
   updateURL();
 }
 
@@ -445,7 +449,7 @@ watch(
           <div class="filter-item">
             <label class="filter-label">格式：</label>
             <el-select
-              :model-value="filters.format"
+              :model-value="filters.format ?? ''"
               placeholder="选择格式"
               clearable
               @change="handleFormatChange"
@@ -463,14 +467,14 @@ watch(
           <div class="filter-item">
             <label class="filter-label">类型：</label>
             <el-select
-              :model-value="filters.vipLevel"
+              :model-value="filters.vipLevel ?? -1"
               placeholder="选择类型"
               clearable
               @change="handleVipLevelChange"
             >
               <el-option
                 v-for="option in vipLevelOptions"
-                :key="option.value ?? 'all'"
+                :key="option.value"
                 :label="option.label"
                 :value="option.value"
               />

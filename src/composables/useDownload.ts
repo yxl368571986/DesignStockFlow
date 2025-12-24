@@ -291,21 +291,34 @@ export function useDownload() {
       // 检查响应
       if (response.code === 200 && response.data?.downloadUrl) {
         // 触发浏览器下载
-        const downloadUrl = response.data.downloadUrl;
+        let downloadUrl = response.data.downloadUrl;
+
+        // 如果是相对路径，转换为后端服务器的完整URL
+        if (downloadUrl.startsWith('/')) {
+          // 获取后端API基础URL
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+          // 移除API路径前缀，只保留基础域名
+          const backendBaseUrl = apiBaseUrl.replace(/\/api\/v1\/?$/, '');
+          downloadUrl = `${backendBaseUrl}${downloadUrl}`;
+        }
 
         // 创建隐藏的a标签触发下载
         const link = document.createElement('a');
         link.href = downloadUrl;
         link.style.display = 'none';
 
-        // 设置下载属性（如果URL是同源的）
+        // 设置下载属性
         try {
           const url = new URL(downloadUrl);
-          if (url.origin === window.location.origin) {
+          // 对于后端服务器的文件，设置download属性
+          if (url.pathname.startsWith('/files/') || url.pathname.startsWith('/uploads/')) {
             link.download = '';
+            // 设置target为_blank，在新窗口打开下载
+            link.target = '_blank';
           }
         } catch {
           // URL解析失败，直接使用href
+          link.target = '_blank';
         }
 
         document.body.appendChild(link);

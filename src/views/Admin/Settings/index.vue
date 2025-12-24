@@ -248,7 +248,7 @@
             <el-form-item label="水印预览">
               <div class="watermark-preview">
                 <div class="preview-image">
-                  <img src="https://via.placeholder.com/400x300?text=Preview" alt="预览图" />
+                  <img src="https://picsum.photos/400/300?random=watermark" alt="预览图" />
                   <div 
                     class="preview-watermark" 
                     :class="`position-${formData.watermark_position}`"

@@ -401,7 +401,7 @@ const fetchRecommendList = async () => {
           {
             resourceId: '1',
             title: 'UI设计规范模板',
-            cover: 'https://via.placeholder.com/300x200/4ECDC4/FFFFFF?text=UI+Design',
+            cover: 'https://picsum.photos/300/200?random=101',
             categoryName: 'UI设计',
             downloadCount: 1234,
             collectCount: 567,
@@ -494,7 +494,7 @@ const fetchResourceList = async () => {
       {
         resourceId: '1',
         title: 'UI设计规范模板',
-        cover: 'https://via.placeholder.com/300x200/4ECDC4/FFFFFF?text=UI+Design',
+        cover: 'https://picsum.photos/300/200?random=101',
         categoryName: 'UI设计',
         downloadCount: 1234,
         collectCount: 567,
@@ -503,7 +503,7 @@ const fetchResourceList = async () => {
       {
         resourceId: '2',
         title: '春节海报设计',
-        cover: 'https://via.placeholder.com/300x200/FF6B6B/FFFFFF?text=Festival',
+        cover: 'https://picsum.photos/300/200?random=102',
         categoryName: '节日海报',
         downloadCount: 2345,
         collectCount: 890,
@@ -512,7 +512,7 @@ const fetchResourceList = async () => {
       {
         resourceId: '3',
         title: '电商Banner模板',
-        cover: 'https://via.placeholder.com/300x200/95E1D3/FFFFFF?text=E-commerce',
+        cover: 'https://picsum.photos/300/200?random=103',
         categoryName: '电商设计',
         downloadCount: 3456,
         collectCount: 1234,

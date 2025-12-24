@@ -116,13 +116,93 @@ const pointsLoading = ref(false);
 const resourceId = computed(() => route.params.id as string);
 
 /**
+ * 根据字符串生成稳定的哈希数值
+ * 用于生成一致的占位图ID
+ */
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * picsum.photos 中已知不存在或有问题的图片 ID
+ * 这些 ID 会导致图片加载失败
+ */
+const INVALID_PICSUM_IDS = new Set([
+  86, 97, 105, 138, 148, 150, 205, 207, 224, 226, 245, 246, 262, 285, 286,
+  298, 303, 332, 333, 346, 359, 394, 414, 422, 438, 462, 463, 470, 489, 540,
+  561, 578, 587, 589, 592, 595, 597, 601, 624, 632, 636, 644, 647, 673, 697,
+  706, 707, 708, 709, 710, 711, 712, 713, 714, 720, 725, 734, 745, 746, 747,
+  748, 749, 750, 751, 752, 753, 754, 759, 761, 762, 763, 771, 792, 801, 812,
+  843, 850, 854, 895, 897, 899, 917, 920, 934, 956, 963, 968, 1007, 1017,
+  1030, 1034, 1046
+]);
+
+/**
+ * 生成稳定的占位图URL
+ * 使用 picsum.photos 的 /id/ 端点，确保图片稳定不变
+ * 避免使用已知不存在的图片 ID
+ */
+function getStablePlaceholderUrl(resourceId: string, index: number = 0): string {
+  const hash = hashCode(resourceId + '-' + index);
+  let imageId = (hash % 1000) + 1; // 生成 1-1000 的图片ID
+  
+  // 如果生成的 ID 在无效列表中，向后查找有效的 ID
+  while (INVALID_PICSUM_IDS.has(imageId)) {
+    imageId = (imageId % 1000) + 1;
+  }
+  
+  return `https://picsum.photos/id/${imageId}/800/600`;
+}
+
+/**
+ * 处理图片URL，将相对路径转换为稳定的占位图
+ * 确保与首页卡片使用相同的图片
+ */
+function getImageUrl(imagePath: string | undefined | null, resourceId: string, index: number = 0): string {
+  // 如果路径为空、null、undefined 或空字符串，使用占位图
+  if (!imagePath || imagePath.trim() === '') {
+    return getStablePlaceholderUrl(resourceId, index);
+  }
+  // 如果是相对路径（/covers/ 或 /previews/ 或 /uploads/），使用稳定的占位图服务
+  if (imagePath.startsWith('/covers/') || imagePath.startsWith('/previews/') || imagePath.startsWith('/uploads/')) {
+    return getStablePlaceholderUrl(resourceId, index);
+  }
+  // 如果是无效的 URL 格式（不是 http/https 开头），使用占位图
+  if (!imagePath.startsWith('http://') && !imagePath.startsWith('https://')) {
+    return getStablePlaceholderUrl(resourceId, index);
+  }
+  return imagePath;
+}
+
+/**
  * 当前预览图URL
  */
 const currentImageUrl = computed(() => {
   if (!resource.value || !resource.value.previewImages.length) {
-    return '';
+    // 如果没有预览图，使用封面图
+    return getImageUrl(resource.value?.cover, resource.value?.resourceId || 'default', 0);
   }
-  return resource.value.previewImages[currentImageIndex.value];
+  return getImageUrl(
+    resource.value.previewImages[currentImageIndex.value],
+    resource.value.resourceId,
+    currentImageIndex.value
+  );
+});
+
+/**
+ * 处理后的预览图列表
+ */
+const processedPreviewImages = computed(() => {
+  if (!resource.value) return [];
+  return resource.value.previewImages.map((img, index) => 
+    getImageUrl(img, resource.value!.resourceId, index)
+  );
 });
 
 /**
@@ -464,11 +544,11 @@ onMounted(() => {
 
           <!-- 缩略图列表 -->
           <div
-            v-if="resource.previewImages.length > 1"
+            v-if="processedPreviewImages.length > 1"
             class="thumbnail-list"
           >
             <div
-              v-for="(image, index) in resource.previewImages"
+              v-for="(image, index) in processedPreviewImages"
               :key="index"
               class="thumbnail-item"
               :class="{ active: currentImageIndex === index }"
@@ -698,7 +778,7 @@ onMounted(() => {
     <!-- 大图查看器 -->
     <el-image-viewer
       v-if="showImageViewer && resource"
-      :url-list="resource.previewImages"
+      :url-list="processedPreviewImages"
       :initial-index="currentImageIndex"
       :hide-on-click-modal="true"
       @close="handleCloseViewer"

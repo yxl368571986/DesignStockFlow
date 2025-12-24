@@ -374,9 +374,11 @@ class ResourceService {
         fileName: resource.file_name,
         fileSize: resource.file_size.toString(),
         fileFormat: resource.file_format,
+        format: resource.file_format, // 兼容前端字段
         previewImages: resource.preview_images,
         categoryId: resource.category_id,
         category: resource.categories,
+        categoryName: resource.categories?.category_name || '', // 兼容前端字段
         tags: resource.tags,
         vipLevel: resource.vip_level,
         downloadCount: resource.download_count,
@@ -388,6 +390,7 @@ class ResourceService {
         createdAt: resource.created_at,
         updatedAt: resource.updated_at,
         user: resource.users_resources_user_idTousers,
+        uploaderName: resource.users_resources_user_idTousers?.nickname || '', // 兼容前端字段
       };
 
       if (userId) {

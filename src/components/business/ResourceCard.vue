@@ -49,15 +49,40 @@ const emit = defineEmits<{
 const router = useRouter();
 const userStore = useUserStore();
 
+/**
+ * 根据字符串生成稳定的哈希数值
+ * 用于生成一致的占位图ID
+ */
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * 生成稳定的占位图URL
+ * 使用 picsum.photos 的 /id/ 端点，确保图片稳定不变
+ * picsum.photos 有约1000张图片，ID范围 0-1084
+ */
+function getStablePlaceholderUrl(resourceId: string, index: number = 0): string {
+  const hash = hashCode(resourceId + '-' + index);
+  const imageId = (hash % 1000) + 1; // 生成 1-1000 的图片ID
+  return `https://picsum.photos/id/${imageId}/800/600`;
+}
+
 // 计算属性：封面图URL（带默认占位图）
+// 使用稳定的占位图URL，确保首页卡片和详情页图片完全一致
 const coverUrl = computed(() => {
   const cover = props.resource.cover;
-  // 如果封面图是相对路径且可能不存在，使用占位图服务
+  // 如果封面图是相对路径且可能不存在，使用稳定的占位图服务
   if (cover && cover.startsWith('/covers/')) {
-    // 使用在线占位图服务
-    return `https://picsum.photos/seed/${props.resource.resourceId}/400/300`;
+    return getStablePlaceholderUrl(props.resource.resourceId, 0);
   }
-  return cover || `https://picsum.photos/seed/${props.resource.resourceId}/400/300`;
+  return cover || getStablePlaceholderUrl(props.resource.resourceId, 0);
 });
 
 // 计算属性：格式化下载次数

@@ -231,6 +231,65 @@ const routes: RouteRecordRaw[] = [
           title: '推荐位管理 - 管理后台'
         }
       },
+      // VIP管理
+      {
+        path: 'vip',
+        name: 'AdminVIP',
+        component: () => import('@/views/Admin/VIP/index.vue'),
+        meta: {
+          title: 'VIP管理 - 管理后台'
+        }
+      },
+      {
+        path: 'vip/packages',
+        name: 'AdminVIPPackages',
+        component: () => import('@/views/Admin/VIP/Packages/index.vue'),
+        meta: {
+          title: '套餐管理 - 管理后台'
+        }
+      },
+      {
+        path: 'vip/privileges',
+        name: 'AdminVIPPrivileges',
+        component: () => import('@/views/Admin/VIP/Privileges/index.vue'),
+        meta: {
+          title: '特权配置 - 管理后台'
+        }
+      },
+      {
+        path: 'vip/orders',
+        name: 'AdminVIPOrders',
+        component: () => import('@/views/Admin/VIP/Orders/index.vue'),
+        meta: {
+          title: '订单管理 - 管理后台'
+        }
+      },
+      {
+        path: 'vip/statistics',
+        name: 'AdminVIPStatistics',
+        component: () => import('@/views/Admin/VIP/Statistics/index.vue'),
+        meta: {
+          title: 'VIP统计 - 管理后台'
+        }
+      },
+      // 积分管理
+      {
+        path: 'points',
+        name: 'AdminPoints',
+        component: () => import('@/views/Admin/Points/index.vue'),
+        meta: {
+          title: '积分管理 - 管理后台'
+        }
+      },
+      // 权限管理
+      {
+        path: 'permissions',
+        name: 'AdminPermissions',
+        component: () => import('@/views/Admin/Permissions/index.vue'),
+        meta: {
+          title: '权限管理 - 管理后台'
+        }
+      },
       // 系统设置
       {
         path: 'settings',

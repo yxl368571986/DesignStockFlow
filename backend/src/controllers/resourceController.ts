@@ -15,8 +15,10 @@ class ResourceController {
   async getResourceList(req: Request, res: Response): Promise<void> {
     try {
       const {
-        pageNum = '1',
-        pageSize = '20',
+        pageNum,
+        page_num,
+        pageSize,
+        page_size,
         categoryId,
         category_id,
         vipLevel,
@@ -29,6 +31,8 @@ class ResourceController {
       } = req.query;
 
       // 兼容camelCase和snake_case参数
+      const actualPageNum = pageNum || page_num || '1';
+      const actualPageSize = pageSize || page_size || '20';
       const actualCategoryId = categoryId || category_id;
       const actualVipLevel = vipLevel || vip_level;
       const actualSortBy = sortBy || sort_by || 'comprehensive';
@@ -44,8 +48,8 @@ class ResourceController {
         : undefined;
       
       const result = await resourceService.getResourceList({
-        pageNum: parseInt(pageNum as string, 10),
-        pageSize: parseInt(pageSize as string, 10),
+        pageNum: parseInt(actualPageNum as string, 10),
+        pageSize: parseInt(actualPageSize as string, 10),
         categoryId: actualCategoryId as string,
         vipLevel: parsedVipLevel,
         keyword: keyword as string,

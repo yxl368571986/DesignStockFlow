@@ -197,7 +197,7 @@ export function setupMock(axiosInstance: AxiosInstance) {
         userId: 'user-mock',
         username: 'mockuser',
         nickname: 'Mock用户',
-        avatar: 'https://via.placeholder.com/100x100?text=User',
+        avatar: 'https://picsum.photos/100/100?random=user1',
         email: 'mock@example.com',
         vipLevel: 0,
         vipExpireTime: null
@@ -220,7 +220,7 @@ export function setupMock(axiosInstance: AxiosInstance) {
       userId: 'user-mock',
       username: 'mockuser',
       nickname: 'Mock用户',
-      avatar: 'https://via.placeholder.com/100x100?text=User',
+      avatar: 'https://picsum.photos/100/100?random=user1',
       email: 'mock@example.com',
       vipLevel: 0,
       vipExpireTime: null

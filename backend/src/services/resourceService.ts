@@ -17,6 +17,7 @@ export interface ResourceListQuery {
   vipLevel?: number;
   keyword?: string;
   sortBy?: 'comprehensive' | 'download' | 'latest' | 'like' | 'collect';
+  format?: string;
   userId?: string;
   isVip?: boolean;
 }
@@ -114,6 +115,7 @@ class ResourceService {
         vipLevel,
         keyword,
         sortBy = 'comprehensive',
+        format,
         userId,
         isVip = false,
       } = query;
@@ -129,6 +131,14 @@ class ResourceService {
 
       if (vipLevel !== undefined) {
         where.vip_level = vipLevel;
+      }
+
+      // 添加文件格式筛选
+      if (format) {
+        where.file_format = {
+          equals: format,
+          mode: 'insensitive',
+        };
       }
 
       if (keyword) {

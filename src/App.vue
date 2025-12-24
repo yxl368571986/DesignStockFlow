@@ -6,28 +6,36 @@
     <!-- PWA更新提示组件 - 全局显示 -->
     <PWAUpdatePrompt />
 
-    <!-- 响应式布局切换 -->
-    <Transition
-      name="layout-fade"
-      mode="out-in"
-    >
-      <!-- 桌面端布局 (>= 768px) -->
-      <DesktopLayout
-        v-if="isDesktop"
-        key="desktop"
-      />
+    <!-- 后台管理系统使用独立布局，不使用前台布局 -->
+    <template v-if="isAdminRoute">
+      <router-view />
+    </template>
 
-      <!-- 移动端布局 (< 768px) -->
-      <MobileLayout
-        v-else
-        key="mobile"
-      />
-    </Transition>
+    <!-- 前台页面使用响应式布局切换 -->
+    <template v-else>
+      <Transition
+        name="layout-fade"
+        mode="out-in"
+      >
+        <!-- 桌面端布局 (>= 768px) -->
+        <DesktopLayout
+          v-if="isDesktop"
+          key="desktop"
+        />
+
+        <!-- 移动端布局 (< 768px) -->
+        <MobileLayout
+          v-else
+          key="mobile"
+        />
+      </Transition>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue';
+import { useRoute } from 'vue-router';
 import NetworkStatus from '@/components/common/NetworkStatus.vue';
 import PWAUpdatePrompt from '@/components/common/PWAUpdatePrompt.vue';
 
@@ -88,6 +96,8 @@ const MobileLayout = defineAsyncComponent({
  * 需求: 需求15.1（响应式设计）
  */
 
+const route = useRoute();
+
 // 断点宽度（768px）
 const BREAKPOINT = 768;
 
@@ -96,6 +106,11 @@ const isDesktop = ref(false);
 
 // 防抖定时器
 let resizeTimer: number | null = null;
+
+// 判断是否为后台管理系统路由
+const isAdminRoute = computed(() => {
+  return route.path.startsWith('/admin');
+});
 
 /**
  * 检测屏幕宽度并更新布局

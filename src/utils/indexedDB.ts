@@ -222,6 +222,11 @@ export async function getAllResources(): Promise<ResourceInfo[]> {
  * @param resources 资源数组
  */
 export async function saveResources(resources: ResourceInfo[]): Promise<void> {
+  // 如果资源数组为空，直接返回
+  if (resources.length === 0) {
+    return;
+  }
+
   const db = await initDB();
 
   return new Promise((resolve, reject) => {

@@ -86,7 +86,17 @@
         <el-table-column label="分类名称" min-width="200">
           <template #default="{ row }">
             <div class="category-name">
-              <el-icon v-if="row.icon" class="category-icon">
+              <el-image 
+                v-if="row.icon && row.icon.startsWith('/')" 
+                :src="row.icon" 
+                class="category-icon-img"
+                fit="contain"
+              >
+                <template #error>
+                  <el-icon class="category-icon"><Folder /></el-icon>
+                </template>
+              </el-image>
+              <el-icon v-else-if="row.icon" class="category-icon">
                 <component :is="row.icon" />
               </el-icon>
               <span>{{ row.categoryName }}</span>
@@ -230,7 +240,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus';
-import { Plus, Edit, Delete, Sort, Check, Close, Rank } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Sort, Check, Close, Rank, Folder } from '@element-plus/icons-vue';
 import Sortable from 'sortablejs';
 import {
   getCategoryTree,
@@ -322,9 +332,16 @@ const loadCategoryTree = async () => {
   loading.value = true;
   try {
     const res = await getCategoryTree();
-    categoryTree.value = res.data || [];
+    // res是AxiosResponse，res.data是ApiResponse，res.data.data才是实际数据
+    const responseData = res.data as any;
+    if (responseData.code === 200 && responseData.data) {
+      categoryTree.value = Array.isArray(responseData.data) ? responseData.data : [];
+    } else {
+      categoryTree.value = [];
+    }
   } catch (error: any) {
     ElMessage.error(error.message || '加载分类列表失败');
+    categoryTree.value = [];
   } finally {
     loading.value = false;
   }
@@ -604,6 +621,12 @@ onMounted(() => {
         .category-icon {
           font-size: 18px;
           color: #165dff;
+        }
+
+        .category-icon-img {
+          width: 18px;
+          height: 18px;
+          flex-shrink: 0;
         }
       }
 

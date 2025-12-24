@@ -234,6 +234,15 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Plus, Edit, Delete, Picture, Link, View } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
+import {
+  getAdminBannerList,
+  createAdminBanner,
+  updateAdminBanner,
+  deleteAdminBanner,
+  updateAdminBannerStatus,
+  type Banner,
+  type BannerFormData
+} from '@/api/adminBanner';
 
 // 类型定义
 interface BannerItem {
@@ -243,8 +252,8 @@ interface BannerItem {
   linkUrl: string;
   linkType: 'internal' | 'external' | 'category' | 'resource';
   sortOrder: number;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   status: number;
   createdAt?: string;
   updatedAt?: string;
@@ -319,38 +328,20 @@ const uploadHeaders = computed(() => {
 const fetchBannerList = async () => {
   loading.value = true;
   try {
-    // TODO: 调用实际API
-    // const response = await getBanners();
-    // bannerList.value = response.data;
-    
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500));
-    bannerList.value = [
-      {
-        bannerId: '1',
-        title: '春节活动轮播图',
-        imageUrl: 'https://via.placeholder.com/1920x600/FF6B6B/FFFFFF?text=Spring+Festival',
-        linkUrl: '/resources?category=festival',
-        linkType: 'category',
-        sortOrder: 1,
-        startTime: '2024-01-01 00:00:00',
-        endTime: '2024-02-29 23:59:59',
-        status: 1,
-        createdAt: '2024-01-01 10:00:00'
-      },
-      {
-        bannerId: '2',
-        title: 'VIP会员优惠',
-        imageUrl: 'https://via.placeholder.com/1920x600/4ECDC4/FFFFFF?text=VIP+Promotion',
-        linkUrl: '/vip',
-        linkType: 'internal',
-        sortOrder: 2,
-        startTime: '2024-01-01 00:00:00',
-        endTime: '2024-12-31 23:59:59',
-        status: 1,
-        createdAt: '2024-01-01 10:00:00'
-      }
-    ];
+    const result = await getAdminBannerList();
+    bannerList.value = result.list.map((item: Banner) => ({
+      bannerId: item.bannerId,
+      title: item.title,
+      imageUrl: item.imageUrl,
+      linkUrl: item.linkUrl,
+      linkType: item.linkType,
+      sortOrder: item.sortOrder,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      status: item.status,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt
+    }));
   } catch (error) {
     ElMessage.error('获取轮播图列表失败');
     console.error(error);
@@ -394,11 +385,13 @@ const handleDelete = async (row: BannerItem) => {
       }
     );
 
-    // TODO: 调用删除API
-    // await deleteBanner(row.bannerId);
-    
-    ElMessage.success('删除成功');
-    await fetchBannerList();
+    const success = await deleteAdminBanner(row.bannerId!);
+    if (success) {
+      ElMessage.success('删除成功');
+      await fetchBannerList();
+    } else {
+      ElMessage.error('删除失败');
+    }
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败');
@@ -410,10 +403,14 @@ const handleDelete = async (row: BannerItem) => {
 // 状态切换
 const handleStatusChange = async (row: BannerItem) => {
   try {
-    // TODO: 调用更新状态API
-    // await updateBannerStatus(row.bannerId, row.status);
-    
-    ElMessage.success(row.status === 1 ? '已启用' : '已禁用');
+    const success = await updateAdminBannerStatus(row.bannerId!, row.status);
+    if (success) {
+      ElMessage.success(row.status === 1 ? '已启用' : '已禁用');
+    } else {
+      // 恢复原状态
+      row.status = row.status === 1 ? 0 : 1;
+      ElMessage.error('状态更新失败');
+    }
   } catch (error) {
     // 恢复原状态
     row.status = row.status === 1 ? 0 : 1;
@@ -438,24 +435,38 @@ const handleSubmit = async () => {
     submitting.value = true;
 
     // 构建提交数据
-    const submitData = {
-      ...formData,
+    const submitData: BannerFormData = {
+      title: formData.title,
+      imageUrl: formData.imageUrl,
+      linkUrl: formData.linkUrl,
+      linkType: formData.linkType,
+      sortOrder: formData.sortOrder,
       startTime: formData.timeRange[0],
-      endTime: formData.timeRange[1]
+      endTime: formData.timeRange[1],
+      status: formData.status
     };
-    delete (submitData as any).timeRange;
 
-    // TODO: 调用添加/编辑API
     if (formData.bannerId) {
-      // await updateBanner(formData.bannerId, submitData);
-      ElMessage.success('编辑成功');
+      // 编辑
+      const result = await updateAdminBanner(formData.bannerId, submitData);
+      if (result) {
+        ElMessage.success('编辑成功');
+        dialogVisible.value = false;
+        await fetchBannerList();
+      } else {
+        ElMessage.error('编辑失败');
+      }
     } else {
-      // await createBanner(submitData);
-      ElMessage.success('添加成功');
+      // 添加
+      const result = await createAdminBanner(submitData);
+      if (result) {
+        ElMessage.success('添加成功');
+        dialogVisible.value = false;
+        await fetchBannerList();
+      } else {
+        ElMessage.error('添加失败');
+      }
     }
-
-    dialogVisible.value = false;
-    await fetchBannerList();
   } catch (error) {
     if (error !== false) {
       ElMessage.error('操作失败');
@@ -524,14 +535,14 @@ const resetForm = () => {
 };
 
 // 获取链接类型标签颜色
-const getLinkTypeTag = (type: string) => {
-  const tagMap: Record<string, string> = {
-    internal: '',
+const getLinkTypeTag = (type: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' => {
+  const tagMap: Record<string, '' | 'success' | 'warning' | 'danger' | 'info' | 'primary'> = {
+    internal: 'info',
     external: 'success',
     category: 'warning',
     resource: 'danger'
   };
-  return tagMap[type] || '';
+  return tagMap[type] || 'info';
 };
 
 // 获取链接类型文本
@@ -625,8 +636,13 @@ onMounted(() => {
 
   // 上传组件样式
   .upload-container {
+    width: 100%;
+    
     .banner-uploader {
+      width: 100%;
+      
       :deep(.el-upload) {
+        width: 100%;
         border: 1px dashed #d9d9d9;
         border-radius: 6px;
         cursor: pointer;
@@ -639,36 +655,41 @@ onMounted(() => {
       }
 
       .banner-image {
-        width: 600px;
-        height: 200px;
+        width: 100%;
+        max-width: 560px;
+        height: 180px;
         object-fit: cover;
         display: block;
       }
 
       .upload-placeholder {
-        width: 600px;
-        height: 200px;
+        width: 100%;
+        max-width: 560px;
+        height: 180px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         background: #fafafa;
+        box-sizing: border-box;
+        padding: 20px;
 
         .upload-icon {
-          font-size: 48px;
+          font-size: 40px;
           color: #999;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
 
         .upload-text {
           font-size: 14px;
           color: #666;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
 
         .upload-tip {
           font-size: 12px;
           color: #999;
+          text-align: center;
         }
       }
     }

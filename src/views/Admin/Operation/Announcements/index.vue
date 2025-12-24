@@ -591,13 +591,13 @@ const resetForm = () => {
 };
 
 // 获取类型标签颜色
-const getTypeTag = (type: string) => {
-  const tagMap: Record<string, string> = {
-    normal: '',
+const getTypeTag = (type: string): '' | 'success' | 'warning' | 'danger' | 'info' | 'primary' => {
+  const tagMap: Record<string, '' | 'success' | 'warning' | 'danger' | 'info' | 'primary'> = {
+    normal: 'info',
     important: 'danger',
     warning: 'warning'
   };
-  return tagMap[type] || '';
+  return tagMap[type] || 'info';
 };
 
 // 获取类型文本

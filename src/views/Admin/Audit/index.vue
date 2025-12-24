@@ -401,8 +401,13 @@ const loadResources = async () => {
 const loadCategories = async () => {
   try {
     const res = await getCategories();
+    // res是AxiosResponse，res.data是ApiResponse，res.data.data才是实际数据
+    const responseData = res.data as any;
+    const categoryList = responseData.code === 200 && responseData.data 
+      ? (Array.isArray(responseData.data) ? responseData.data : [])
+      : [];
     // 转换CategoryInfo到Category格式
-    categories.value = (res.data || []).map((cat: any) => ({
+    categories.value = categoryList.map((cat: any) => ({
       categoryId: cat.categoryId,
       categoryName: cat.categoryName,
       categoryCode: cat.categoryCode,
@@ -415,6 +420,7 @@ const loadCategories = async () => {
     }));
   } catch (error: any) {
     console.error('加载分类失败:', error);
+    categories.value = [];
   }
 };
 

@@ -42,7 +42,7 @@ export interface AuditResourceParams {
  * GET /api/v1/admin/audit/resources
  */
 export const getAuditResources = (params: GetAuditResourcesParams) => {
-  return request.get<GetAuditResourcesResponse>('/api/v1/admin/audit/resources', { params });
+  return request.get<GetAuditResourcesResponse>('/admin/audit/resources', { params });
 };
 
 /**
@@ -50,5 +50,5 @@ export const getAuditResources = (params: GetAuditResourcesParams) => {
  * POST /api/v1/admin/audit/resources/:resourceId
  */
 export const auditResource = (resourceId: string, data: AuditResourceParams) => {
-  return request.post(`/api/v1/admin/audit/resources/${resourceId}`, data);
+  return request.post(`/admin/audit/resources/${resourceId}`, data);
 };

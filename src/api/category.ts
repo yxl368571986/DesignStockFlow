@@ -60,7 +60,7 @@ export interface SortDataItem {
  */
 export function getCategoryTree() {
   return request<Category[]>({
-    url: '/api/v1/admin/categories',
+    url: '/admin/categories',
     method: 'GET'
   });
 }
@@ -70,7 +70,7 @@ export function getCategoryTree() {
  */
 export function createCategory(data: CreateCategoryParams) {
   return request<Category>({
-    url: '/api/v1/admin/categories',
+    url: '/admin/categories',
     method: 'POST',
     data
   });
@@ -81,7 +81,7 @@ export function createCategory(data: CreateCategoryParams) {
  */
 export function updateCategory(categoryId: string, data: UpdateCategoryParams) {
   return request<Category>({
-    url: `/api/v1/admin/categories/${categoryId}`,
+    url: `/admin/categories/${categoryId}`,
     method: 'PUT',
     data
   });
@@ -92,7 +92,7 @@ export function updateCategory(categoryId: string, data: UpdateCategoryParams) {
  */
 export function deleteCategory(categoryId: string) {
   return request<null>({
-    url: `/api/v1/admin/categories/${categoryId}`,
+    url: `/admin/categories/${categoryId}`,
     method: 'DELETE'
   });
 }
@@ -102,7 +102,7 @@ export function deleteCategory(categoryId: string) {
  */
 export function updateCategoriesSort(sortData: SortDataItem[]) {
   return request<null>({
-    url: '/api/v1/admin/categories/sort',
+    url: '/admin/categories/sort',
     method: 'PUT',
     data: { sortData }
   });

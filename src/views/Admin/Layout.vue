@@ -18,9 +18,21 @@
       :class="{ 'collapsed': isCollapsed }"
     >
       <!-- Logo区域 -->
-      <div class="sidebar-logo">
-        <img v-if="!isCollapsed" src="https://via.placeholder.com/120x32?text=StarTide" alt="星潮设计" class="logo-img" />
-        <img v-else src="https://via.placeholder.com/32x32?text=ST" alt="星潮设计" class="logo-mini" />
+      <div class="sidebar-logo" @click="goToHome" style="cursor: pointer;">
+        <div class="logo-icon">
+          <svg viewBox="0 0 100 100" class="logo-svg">
+            <defs>
+              <linearGradient id="adminLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color: #165dff; stop-opacity: 1" />
+                <stop offset="100%" style="stop-color: #ff7d00; stop-opacity: 1" />
+              </linearGradient>
+            </defs>
+            <polygon
+              points="50,10 61,35 88,35 67,52 77,77 50,60 23,77 33,52 12,35 39,35"
+              fill="url(#adminLogoGradient)"
+            />
+          </svg>
+        </div>
         <span v-if="!isCollapsed" class="logo-text">星潮设计</span>
       </div>
 
@@ -121,7 +133,7 @@
     <div class="admin-main">
       <!-- 顶部导航栏 -->
       <header class="admin-header">
-        <!-- 左侧：折叠按钮 + 面包屑 -->
+        <!-- 左侧：折叠按钮 + 返回首页 + 面包屑 -->
         <div class="header-left">
           <el-button 
             :icon="isCollapsed ? Expand : Fold" 
@@ -129,6 +141,20 @@
             @click="toggleSidebar"
             class="collapse-btn"
           />
+          
+          <!-- 返回首页按钮 -->
+          <el-tooltip content="返回前台首页" placement="bottom">
+            <el-button 
+              class="back-home-btn"
+              @click="goToHome"
+            >
+              <el-icon><HomeFilled /></el-icon>
+              <span class="btn-text">返回首页</span>
+            </el-button>
+          </el-tooltip>
+
+          <el-divider direction="vertical" />
+
           <el-breadcrumb separator="/" class="breadcrumb">
             <el-breadcrumb-item :to="{ path: '/admin/dashboard' }">首页</el-breadcrumb-item>
             <el-breadcrumb-item 
@@ -170,6 +196,10 @@
             </div>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item command="home">
+                  <el-icon><HomeFilled /></el-icon>
+                  返回首页
+                </el-dropdown-item>
                 <el-dropdown-item command="profile">个人信息</el-dropdown-item>
                 <el-dropdown-item command="settings">账号设置</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
@@ -213,7 +243,8 @@ import {
   Search,
   Bell,
   Sunny,
-  Moon
+  Moon,
+  HomeFilled
 } from '@element-plus/icons-vue';
 
 const route = useRoute();
@@ -267,6 +298,9 @@ const toggleTheme = () => {
 // 处理用户下拉菜单命令
 const handleUserCommand = (command: string) => {
   switch (command) {
+    case 'home':
+      goToHome();
+      break;
     case 'profile':
       router.push('/admin/profile');
       break;
@@ -277,6 +311,11 @@ const handleUserCommand = (command: string) => {
       handleLogout();
       break;
   }
+};
+
+// 返回首页
+const goToHome = () => {
+  router.push('/');
 };
 
 // 退出登录
@@ -352,21 +391,27 @@ initializeState();
     padding: 0 20px;
     border-bottom: 1px solid var(--admin-border-light);
     background: linear-gradient(135deg, rgba(22, 93, 255, 0.05), rgba(255, 125, 0, 0.05));
+    gap: 10px;
+    transition: background var(--admin-transition-fast);
 
-    .logo-img {
-      height: 32px;
-      margin-right: 12px;
-      transition: transform var(--admin-transition-normal);
+    &:hover {
+      background: linear-gradient(135deg, rgba(22, 93, 255, 0.08), rgba(255, 125, 0, 0.08));
     }
 
-    .logo-mini {
+    .logo-icon {
+      width: 32px;
       height: 32px;
-      transition: transform var(--admin-transition-normal);
-    }
+      flex-shrink: 0;
 
-    .logo-img:hover,
-    .logo-mini:hover {
-      transform: scale(1.1) rotate(5deg);
+      .logo-svg {
+        width: 100%;
+        height: 100%;
+        transition: transform var(--admin-transition-normal);
+      }
+
+      &:hover .logo-svg {
+        transform: scale(1.1) rotate(5deg);
+      }
     }
 
     .logo-text {
@@ -376,7 +421,12 @@ initializeState();
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      white-space: nowrap;
     }
+  }
+
+  &.collapsed .sidebar-logo {
+    padding: 0 10px;
   }
 
   .sidebar-menu {
@@ -457,7 +507,7 @@ initializeState();
   .header-left {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 
     .collapse-btn {
       border: none;
@@ -472,6 +522,47 @@ initializeState();
       &:active {
         transform: scale(0.95);
       }
+    }
+
+    // 返回首页按钮样式
+    .back-home-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      height: 36px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #ff7d00 0%, #ffa940 100%);
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all var(--admin-transition-fast);
+      box-shadow: 0 2px 8px rgba(255, 125, 0, 0.3);
+
+      .el-icon {
+        font-size: 16px;
+      }
+
+      .btn-text {
+        white-space: nowrap;
+      }
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 125, 0, 0.4);
+        background: linear-gradient(135deg, #ff8c1a 0%, #ffb347 100%);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+
+    :deep(.el-divider--vertical) {
+      height: 20px;
+      margin: 0 4px;
+      border-color: var(--admin-border-light);
     }
 
     .breadcrumb {

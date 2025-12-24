@@ -24,12 +24,15 @@ class ResourceController {
         keyword,
         sortBy,
         sort_by,
+        format,
+        file_format,
       } = req.query;
 
       // 兼容camelCase和snake_case参数
       const actualCategoryId = categoryId || category_id;
       const actualVipLevel = vipLevel || vip_level;
       const actualSortBy = sortBy || sort_by || 'comprehensive';
+      const actualFormat = format || file_format;
 
       // 获取用户信息（如果已登录）
       const userId = req.user?.userId;
@@ -47,6 +50,7 @@ class ResourceController {
         vipLevel: parsedVipLevel,
         keyword: keyword as string,
         sortBy: actualSortBy as any,
+        format: actualFormat as string,
         userId,
         isVip,
       });

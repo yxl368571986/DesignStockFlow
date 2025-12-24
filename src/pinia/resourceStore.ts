@@ -263,6 +263,7 @@ export const useResourceStore = defineStore('resource', () => {
       console.log('使用缓存数据:', cacheKey);
       resources.value = cachedData.data;
       total.value = cachedData.total;
+      loading.value = false; // 确保缓存命中时 loading 为 false
       return;
     }
 

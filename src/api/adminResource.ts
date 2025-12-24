@@ -66,7 +66,7 @@ export async function getAdminResourceList(params: ResourceListParams): Promise<
     list: Resource[];
     total: number;
   }>({
-    url: '/api/v1/admin/resources',
+    url: '/admin/resources',
     method: 'GET',
     params
   });
@@ -83,7 +83,7 @@ export async function getAdminResourceList(params: ResourceListParams): Promise<
  */
 export function getAdminResourceDetail(resourceId: string) {
   return request<Resource>({
-    url: `/api/v1/admin/resources/${resourceId}`,
+    url: `/admin/resources/${resourceId}`,
     method: 'GET'
   });
 }
@@ -93,7 +93,7 @@ export function getAdminResourceDetail(resourceId: string) {
  */
 export function updateAdminResource(resourceId: string, data: ResourceEditParams) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}`,
+    url: `/admin/resources/${resourceId}`,
     method: 'PUT',
     data
   });
@@ -104,7 +104,7 @@ export function updateAdminResource(resourceId: string, data: ResourceEditParams
  */
 export function offlineResource(resourceId: string) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}/offline`,
+    url: `/admin/resources/${resourceId}/offline`,
     method: 'PUT'
   });
 }
@@ -114,7 +114,7 @@ export function offlineResource(resourceId: string) {
  */
 export function onlineResource(resourceId: string) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}/online`,
+    url: `/admin/resources/${resourceId}/online`,
     method: 'PUT'
   });
 }
@@ -124,7 +124,7 @@ export function onlineResource(resourceId: string) {
  */
 export function deleteAdminResource(resourceId: string) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}`,
+    url: `/admin/resources/${resourceId}`,
     method: 'DELETE'
   });
 }
@@ -134,7 +134,7 @@ export function deleteAdminResource(resourceId: string) {
  */
 export function topResource(resourceId: string, isTop: boolean) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}/top`,
+    url: `/admin/resources/${resourceId}/top`,
     method: 'PUT',
     data: { isTop }
   });
@@ -145,7 +145,7 @@ export function topResource(resourceId: string, isTop: boolean) {
  */
 export function recommendResource(resourceId: string, isRecommend: boolean) {
   return request({
-    url: `/api/v1/admin/resources/${resourceId}/recommend`,
+    url: `/admin/resources/${resourceId}/recommend`,
     method: 'PUT',
     data: { isRecommend }
   });
@@ -156,7 +156,7 @@ export function recommendResource(resourceId: string, isRecommend: boolean) {
  */
 export function batchDeleteResources(resourceIds: string[]) {
   return request({
-    url: '/api/v1/admin/resources/batch-delete',
+    url: '/admin/resources/batch-delete',
     method: 'POST',
     data: { resourceIds }
   });
@@ -167,7 +167,7 @@ export function batchDeleteResources(resourceIds: string[]) {
  */
 export function batchOfflineResources(resourceIds: string[]) {
   return request({
-    url: '/api/v1/admin/resources/batch-offline',
+    url: '/admin/resources/batch-offline',
     method: 'POST',
     data: { resourceIds }
   });

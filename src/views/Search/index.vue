@@ -32,10 +32,11 @@ const resourceStore = useResourceStore();
 
 // 本地状态
 const showFilterDrawer = ref(false); // 是否显示筛选抽屉（移动端）
+const searchInitialized = ref(false); // 搜索是否已初始化完成
 
 // 筛选选项
 const formatOptions = [
-  { label: '全部格式', value: undefined },
+  { label: '全部格式', value: '' },
   { label: 'PSD', value: 'PSD' },
   { label: 'AI', value: 'AI' },
   { label: 'CDR', value: 'CDR' },
@@ -49,7 +50,7 @@ const formatOptions = [
 ];
 
 const vipLevelOptions = [
-  { label: '全部资源', value: undefined },
+  { label: '全部资源', value: -1 },
   { label: '免费资源', value: 0 },
   { label: 'VIP专属', value: 1 }
 ];
@@ -94,14 +95,14 @@ const pageSize = computed({
 
 // 计算属性：当前格式筛选
 const currentFormat = computed({
-  get: () => resourceStore.searchParams.format,
-  set: (value: string | undefined) => resourceStore.setFormat(value)
+  get: () => resourceStore.searchParams.format || '',
+  set: (value: string) => resourceStore.setFormat(value === '' ? undefined : value)
 });
 
 // 计算属性：当前VIP等级筛选
 const currentVipLevel = computed({
-  get: () => resourceStore.searchParams.vipLevel,
-  set: (value: number | undefined) => resourceStore.setVipLevel(value)
+  get: () => resourceStore.searchParams.vipLevel ?? -1,
+  set: (value: number) => resourceStore.setVipLevel(value === -1 ? undefined : value)
 });
 
 // 计算属性：当前排序方式
@@ -113,7 +114,7 @@ const currentSortType = computed({
 /**
  * 从URL参数初始化搜索
  */
-function initSearchFromUrl() {
+async function initSearchFromUrl() {
   const keyword = route.query.keyword as string | undefined;
   const categoryId = route.query.category as string | undefined;
   const format = route.query.format as string | undefined;
@@ -135,7 +136,8 @@ function initSearchFromUrl() {
   );
 
   // 执行搜索
-  resourceStore.fetchResources();
+  await resourceStore.fetchResources();
+  searchInitialized.value = true;
 }
 
 /**
@@ -234,8 +236,8 @@ function handleCollect(resourceId: string) {
  * 重置筛选
  */
 function handleResetFilters() {
-  currentFormat.value = undefined;
-  currentVipLevel.value = undefined;
+  currentFormat.value = '';
+  currentVipLevel.value = -1;
   currentSortType.value = 'latest';
   handleFilterChange();
 }
@@ -315,7 +317,7 @@ onMounted(() => {
                 <el-radio
                   v-for="option in formatOptions"
                   :key="option.value || 'all'"
-                  :label="option.value"
+                  :value="option.value"
                   class="filter-radio"
                 >
                   {{ option.label }}
@@ -335,7 +337,7 @@ onMounted(() => {
                 <el-radio
                   v-for="option in vipLevelOptions"
                   :key="option.value ?? 'all'"
-                  :label="option.value"
+                  :value="option.value"
                   class="filter-radio"
                 >
                   {{ option.label }}
@@ -355,7 +357,7 @@ onMounted(() => {
                 <el-radio
                   v-for="option in sortOptions"
                   :key="option.value"
-                  :label="option.value"
+                  :value="option.value"
                   class="filter-radio"
                 >
                   {{ option.label }}
@@ -374,9 +376,9 @@ onMounted(() => {
 
           <!-- 资源列表区 -->
           <div class="results-area">
-            <!-- 加载状态 -->
+            <!-- 加载状态：只在loading且搜索未完成时显示 -->
             <Loading
-              v-if="isLoading"
+              v-if="isLoading || !searchInitialized"
               text="正在搜索..."
             />
 
@@ -395,7 +397,7 @@ onMounted(() => {
               />
             </div>
 
-            <!-- 空状态 -->
+            <!-- 空状态：当搜索完成且没有结果时显示 -->
             <Empty
               v-else
               icon="Search"
@@ -449,7 +451,7 @@ onMounted(() => {
             <el-radio
               v-for="option in formatOptions"
               :key="option.value || 'all'"
-              :label="option.value"
+              :value="option.value"
               class="filter-radio"
             >
               {{ option.label }}
@@ -468,7 +470,7 @@ onMounted(() => {
             <el-radio
               v-for="option in vipLevelOptions"
               :key="option.value ?? 'all'"
-              :label="option.value"
+              :value="option.value"
               class="filter-radio"
             >
               {{ option.label }}
@@ -487,7 +489,7 @@ onMounted(() => {
             <el-radio
               v-for="option in sortOptions"
               :key="option.value"
-              :label="option.value"
+              :value="option.value"
               class="filter-radio"
             >
               {{ option.label }}

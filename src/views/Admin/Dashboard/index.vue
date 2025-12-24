@@ -138,8 +138,16 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import AdminChart from '@/components/common/AdminChart.vue';
 import { createLineChartOption, createPieChartOption, createBarChartOption } from '@/utils/chartOptions';
+import {
+  getOverview,
+  getUserGrowth,
+  getResourceGrowth,
+  getDownloadStats,
+  getHotCategories
+} from '@/api/statistics';
 import {
   User,
   Document,
@@ -151,71 +159,233 @@ import {
   Setting
 } from '@element-plus/icons-vue';
 
+import type { EChartsOption } from 'echarts';
+
 const router = useRouter();
+
+// 加载状态
+const loading = ref(false);
 
 // 统计数据
 const stats = ref({
-  totalUsers: 12580,
-  userGrowth: 12.5,
-  totalResources: 8964,
-  resourceGrowth: 8.3,
-  todayDownloads: 1256,
-  downloadChange: -3.2,
-  vipUsers: 856,
-  vipGrowth: 15.8
+  totalUsers: 0,
+  userGrowth: 0,
+  totalResources: 0,
+  resourceGrowth: 0,
+  todayDownloads: 0,
+  downloadChange: 0,
+  vipUsers: 0,
+  vipGrowth: 0
 });
 
 // 待审核数量
-const pendingAudit = ref(23);
+const pendingAudit = ref(0);
+
+// 图表配置类型 - 与AdminChart组件props类型保持一致
+type ChartOption = EChartsOption | Record<string, unknown>;
 
 // 用户增长趋势数据
-const userGrowthOption = ref(createLineChartOption({
+const userGrowthOption = ref<ChartOption>({});
+
+// 资源增长趋势数据
+const resourceGrowthOption = ref<ChartOption>({});
+
+// 分类分布数据
+const categoryDistributionOption = ref<ChartOption>({});
+
+// 下载量统计数据
+const downloadStatsOption = ref<ChartOption>({});
+
+// 加载数据概览
+const loadOverview = async () => {
+  try {
+    const res = await getOverview();
+    if (res.code === 200 && res.data) {
+      const data = res.data;
+      stats.value.totalUsers = data.totalUsers ?? 0;
+      stats.value.totalResources = data.totalResources ?? 0;
+      stats.value.todayDownloads = data.todayDownloads ?? 0;
+      stats.value.vipUsers = data.vipUsers ?? 0;
+      pendingAudit.value = data.pendingAudit ?? 0;
+      // 增长率暂时使用模拟数据，后续可以从API获取
+      stats.value.userGrowth = 12.5;
+      stats.value.resourceGrowth = 8.3;
+      stats.value.downloadChange = -3.2;
+      stats.value.vipGrowth = 15.8;
+    } else {
+      // API返回非200时使用默认数据
+      setDefaultStats();
+    }
+  } catch (error) {
+    console.error('加载数据概览失败:', error);
+    setDefaultStats();
+  }
+};
+
+// 设置默认统计数据
+const setDefaultStats = () => {
+  stats.value = {
+    totalUsers: 12580,
+    userGrowth: 12.5,
+    totalResources: 8964,
+    resourceGrowth: 8.3,
+    todayDownloads: 1256,
+    downloadChange: -3.2,
+    vipUsers: 856,
+    vipGrowth: 15.8
+  };
+  pendingAudit.value = 23;
+};
+
+// 默认用户增长图表配置
+const getDefaultUserGrowthOption = () => createLineChartOption({
   xAxis: ['1月', '2月', '3月', '4月', '5月', '6月'],
   series: [{
     name: '新增用户',
     data: [820, 932, 901, 934, 1290, 1330],
     areaStyle: true
   }]
-}) as any);
+});
 
-// 资源增长趋势数据
-const resourceGrowthOption = ref(createLineChartOption({
+// 加载用户增长数据
+const loadUserGrowth = async () => {
+  try {
+    const res = await getUserGrowth(30);
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      const dates = res.data.map((item) => item.date.slice(5)); // 只显示月-日
+      const counts = res.data.map((item) => item.newUsers ?? item.count ?? 0);
+      userGrowthOption.value = createLineChartOption({
+        xAxis: dates,
+        series: [{
+          name: '新增用户',
+          data: counts,
+          areaStyle: true
+        }]
+      });
+    } else {
+      userGrowthOption.value = getDefaultUserGrowthOption();
+    }
+  } catch (error) {
+    console.error('加载用户增长数据失败:', error);
+    userGrowthOption.value = getDefaultUserGrowthOption();
+  }
+};
+
+// 默认资源增长图表配置
+const getDefaultResourceGrowthOption = () => createLineChartOption({
   xAxis: ['1月', '2月', '3月', '4月', '5月', '6月'],
   series: [{
     name: '新增资源',
     data: [620, 732, 701, 734, 990, 1130],
     areaStyle: true
   }]
-}) as any);
+});
 
-// 分类分布数据
-const categoryDistributionOption = ref(createPieChartOption([
+// 加载资源增长数据
+const loadResourceGrowth = async () => {
+  try {
+    const res = await getResourceGrowth(30);
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      const dates = res.data.map((item) => item.date.slice(5));
+      const counts = res.data.map((item) => item.newResources ?? item.count ?? 0);
+      resourceGrowthOption.value = createLineChartOption({
+        xAxis: dates,
+        series: [{
+          name: '新增资源',
+          data: counts,
+          areaStyle: true
+        }]
+      });
+    } else {
+      resourceGrowthOption.value = getDefaultResourceGrowthOption();
+    }
+  } catch (error) {
+    console.error('加载资源增长数据失败:', error);
+    resourceGrowthOption.value = getDefaultResourceGrowthOption();
+  }
+};
+
+// 默认分类分布图表配置
+const getDefaultCategoryOption = () => createPieChartOption([
   { name: 'UI设计', value: 2580 },
   { name: '插画', value: 1856 },
   { name: '摄影图', value: 1456 },
   { name: '电商', value: 1256 },
   { name: '其他', value: 816 }
-]) as any);
+]);
 
-// 下载量统计数据
-const downloadStatsOption = ref(createBarChartOption({
+// 加载分类分布数据
+const loadCategoryDistribution = async () => {
+  try {
+    const res = await getHotCategories();
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      const pieData = res.data.map((item) => ({
+        name: item.categoryName,
+        value: item.resourceCount
+      }));
+      categoryDistributionOption.value = createPieChartOption(pieData);
+    } else {
+      categoryDistributionOption.value = getDefaultCategoryOption();
+    }
+  } catch (error) {
+    console.error('加载分类分布数据失败:', error);
+    categoryDistributionOption.value = getDefaultCategoryOption();
+  }
+};
+
+// 默认下载统计图表配置
+const getDefaultDownloadOption = () => createBarChartOption({
   xAxis: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
   series: [{
     name: '下载量',
     data: [820, 932, 901, 934, 1290, 1330, 1120]
   }]
-}) as any);
+});
 
-// 加载用户增长数据
-const loadUserGrowth = () => {
-  console.log('刷新用户增长数据');
-  // 这里可以调用API重新加载数据
+// 加载下载统计数据
+const loadDownloadStats = async () => {
+  try {
+    const res = await getDownloadStats(7);
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const dates = res.data.map((item) => {
+        const date = new Date(item.date);
+        return weekDays[date.getDay()];
+      });
+      const counts = res.data.map((item) => item.downloads ?? item.count ?? 0);
+      downloadStatsOption.value = createBarChartOption({
+        xAxis: dates,
+        series: [{
+          name: '下载量',
+          data: counts
+        }]
+      });
+    } else {
+      downloadStatsOption.value = getDefaultDownloadOption();
+    }
+  } catch (error) {
+    console.error('加载下载统计数据失败:', error);
+    downloadStatsOption.value = getDefaultDownloadOption();
+  }
 };
 
-// 加载资源增长数据
-const loadResourceGrowth = () => {
-  console.log('刷新资源增长数据');
-  // 这里可以调用API重新加载数据
+// 加载所有数据
+const loadAllData = async () => {
+  loading.value = true;
+  try {
+    await Promise.all([
+      loadOverview(),
+      loadUserGrowth(),
+      loadResourceGrowth(),
+      loadCategoryDistribution(),
+      loadDownloadStats()
+    ]);
+  } catch (error) {
+    console.error('加载数据失败:', error);
+    ElMessage.error('加载数据失败，显示默认数据');
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 快捷操作导航
@@ -236,8 +406,7 @@ const goToSettings = () => {
 };
 
 onMounted(() => {
-  // 初始化数据
-  console.log('Dashboard mounted');
+  loadAllData();
 });
 </script>
 

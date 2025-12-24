@@ -62,7 +62,7 @@ export interface SystemSettingsResponse {
  */
 export function getSystemSettings() {
   return request<SystemSettingsResponse>({
-    url: '/api/v1/admin/settings',
+    url: '/admin/settings',
     method: 'GET'
   });
 }
@@ -72,7 +72,7 @@ export function getSystemSettings() {
  */
 export function updateSystemSettings(data: Partial<Record<string, any>>) {
   return request({
-    url: '/api/v1/admin/settings',
+    url: '/admin/settings',
     method: 'PUT',
     data
   });
@@ -83,7 +83,7 @@ export function updateSystemSettings(data: Partial<Record<string, any>>) {
  */
 export function resetSystemSettings() {
   return request({
-    url: '/api/v1/admin/settings/reset',
+    url: '/admin/settings/reset',
     method: 'POST'
   });
 }

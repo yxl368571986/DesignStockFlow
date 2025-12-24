@@ -51,7 +51,7 @@ import { ElMessage } from 'element-plus';
 
 interface Props {
   title?: string;
-  option: echarts.EChartsOption;
+  option: echarts.EChartsOption | Record<string, unknown>;
   height?: string;
   exportable?: boolean;
   refreshable?: boolean;
@@ -82,9 +82,12 @@ const initChart = () => {
   // 创建图表实例
   chartInstance = echarts.init(chartRef.value);
 
+  // 将option转换为EChartsOption类型
+  const chartOption = props.option as echarts.EChartsOption;
+
   // 设置默认主题配置
   const defaultOption: echarts.EChartsOption = {
-    ...props.option,
+    ...chartOption,
     // 全局配置
     backgroundColor: 'transparent',
     // 工具提示
@@ -102,14 +105,14 @@ const initChart = () => {
           color: '#999'
         }
       },
-      ...props.option.tooltip
+      ...(chartOption.tooltip as object || {})
     },
     // 图例
     legend: {
       textStyle: {
         color: '#4e5969'
       },
-      ...props.option.legend
+      ...(chartOption.legend as object || {})
     },
     // 网格
     grid: {
@@ -117,7 +120,7 @@ const initChart = () => {
       right: '4%',
       bottom: '3%',
       containLabel: true,
-      ...props.option.grid
+      ...(chartOption.grid as object || {})
     }
   };
 

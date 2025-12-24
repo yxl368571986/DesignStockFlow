@@ -17,15 +17,28 @@
 <template>
   <div class="statistics-page">
     <div class="page-header">
-      <h2 class="page-title">数据统计</h2>
+      <h2 class="page-title">
+        数据统计
+      </h2>
       
       <!-- 时间范围选择器 -->
       <div class="date-range-picker">
-        <el-radio-group v-model="dateRange" @change="handleDateRangeChange">
-          <el-radio-button label="7">最近7天</el-radio-button>
-          <el-radio-button label="30">最近30天</el-radio-button>
-          <el-radio-button label="90">最近90天</el-radio-button>
-          <el-radio-button label="custom">自定义</el-radio-button>
+        <el-radio-group
+          v-model="dateRange"
+          @change="handleDateRangeChange"
+        >
+          <el-radio-button label="7">
+            最近7天
+          </el-radio-button>
+          <el-radio-button label="30">
+            最近30天
+          </el-radio-button>
+          <el-radio-button label="90">
+            最近90天
+          </el-radio-button>
+          <el-radio-button label="custom">
+            自定义
+          </el-radio-button>
         </el-radio-group>
         
         <el-date-picker
@@ -37,82 +50,130 @@
           end-placeholder="结束日期"
           format="YYYY-MM-DD"
           value-format="YYYY-MM-DD"
-          @change="handleCustomDateChange"
           class="ml-3"
+          @change="handleCustomDateChange"
         />
       </div>
     </div>
 
     <!-- 核心数据卡片 -->
     <div class="stats-grid">
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon user">
             <el-icon><User /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.userTotal) }}</div>
-            <div class="stat-label">用户总数</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.totalUsers) }}
+            </div>
+            <div class="stat-label">
+              用户总数
+            </div>
           </div>
         </div>
       </el-card>
 
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon resource">
             <el-icon><Document /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.resourceTotal) }}</div>
-            <div class="stat-label">资源总数</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.totalResources) }}
+            </div>
+            <div class="stat-label">
+              资源总数
+            </div>
           </div>
         </div>
       </el-card>
 
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon download">
             <el-icon><Download /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.todayDownload) }}</div>
-            <div class="stat-label">今日下载</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.todayDownloads) }}
+            </div>
+            <div class="stat-label">
+              今日下载
+            </div>
           </div>
         </div>
       </el-card>
 
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon upload">
             <el-icon><Upload /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.todayUpload) }}</div>
-            <div class="stat-label">今日上传</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.todayUploads) }}
+            </div>
+            <div class="stat-label">
+              今日上传
+            </div>
           </div>
         </div>
       </el-card>
 
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon vip">
             <el-icon><Star /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.vipTotal) }}</div>
-            <div class="stat-label">VIP用户</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.vipUsers) }}
+            </div>
+            <div class="stat-label">
+              VIP用户
+            </div>
           </div>
         </div>
       </el-card>
 
-      <el-card class="stat-card" shadow="hover" v-loading="loading.overview">
+      <el-card
+        v-loading="loading.overview"
+        class="stat-card"
+        shadow="hover"
+      >
         <div class="stat-content">
           <div class="stat-icon audit">
             <el-icon><Select /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(overview.pendingAudit) }}</div>
-            <div class="stat-label">待审核</div>
+            <div class="stat-value">
+              {{ formatNumber(overview.pendingAudit) }}
+            </div>
+            <div class="stat-label">
+              待审核
+            </div>
           </div>
         </div>
       </el-card>
@@ -120,65 +181,107 @@
 
     <!-- 趋势图表 -->
     <div class="charts-row">
-      <el-card class="chart-card" shadow="never" v-loading="loading.userGrowth">
+      <el-card
+        v-loading="loading.userGrowth"
+        class="chart-card"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>用户增长趋势</span>
           </div>
         </template>
-        <div ref="userGrowthChart" class="chart-container"></div>
+        <div
+          ref="userGrowthChart"
+          class="chart-container"
+        />
       </el-card>
 
-      <el-card class="chart-card" shadow="never" v-loading="loading.resourceGrowth">
+      <el-card
+        v-loading="loading.resourceGrowth"
+        class="chart-card"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>资源增长趋势</span>
           </div>
         </template>
-        <div ref="resourceGrowthChart" class="chart-container"></div>
+        <div
+          ref="resourceGrowthChart"
+          class="chart-container"
+        />
       </el-card>
     </div>
 
     <div class="charts-row">
-      <el-card class="chart-card full-width" shadow="never" v-loading="loading.downloadStats">
+      <el-card
+        v-loading="loading.downloadStats"
+        class="chart-card full-width"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>下载统计</span>
           </div>
         </template>
-        <div ref="downloadStatsChart" class="chart-container"></div>
+        <div
+          ref="downloadStatsChart"
+          class="chart-container"
+        />
       </el-card>
     </div>
 
     <!-- 排行榜 -->
     <div class="charts-row">
-      <el-card class="chart-card" shadow="never" v-loading="loading.hotResources">
+      <el-card
+        v-loading="loading.hotResources"
+        class="chart-card"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>热门资源TOP10</span>
           </div>
         </template>
-        <div ref="hotResourcesChart" class="chart-container"></div>
+        <div
+          ref="hotResourcesChart"
+          class="chart-container"
+        />
       </el-card>
 
-      <el-card class="chart-card" shadow="never" v-loading="loading.hotCategories">
+      <el-card
+        v-loading="loading.hotCategories"
+        class="chart-card"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>热门分类TOP10</span>
           </div>
         </template>
-        <div ref="hotCategoriesChart" class="chart-container"></div>
+        <div
+          ref="hotCategoriesChart"
+          class="chart-container"
+        />
       </el-card>
     </div>
 
     <div class="charts-row">
-      <el-card class="chart-card full-width" shadow="never" v-loading="loading.activeUsers">
+      <el-card
+        v-loading="loading.activeUsers"
+        class="chart-card full-width"
+        shadow="never"
+      >
         <template #header>
           <div class="card-header">
             <span>活跃用户TOP10</span>
           </div>
         </template>
-        <div ref="activeUsersChart" class="chart-container"></div>
+        <div
+          ref="activeUsersChart"
+          class="chart-container"
+        />
       </el-card>
     </div>
   </div>
@@ -214,11 +317,11 @@ import {
 
 // 数据概览
 const overview = ref<OverviewData>({
-  userTotal: 0,
-  resourceTotal: 0,
-  todayDownload: 0,
-  todayUpload: 0,
-  vipTotal: 0,
+  totalUsers: 0,
+  totalResources: 0,
+  todayDownloads: 0,
+  todayUploads: 0,
+  vipUsers: 0,
   pendingAudit: 0
 });
 

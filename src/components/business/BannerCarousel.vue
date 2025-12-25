@@ -15,6 +15,8 @@
       v-if="activeBanners && activeBanners.length > 0"
       :interval="3000"
       :height="carouselHeight"
+      :autoplay="true"
+      :loop="true"
       arrow="hover"
       indicator-position="outside"
       @change="handleCarouselChange"
@@ -148,11 +150,39 @@ function handleCarouselChange(index: number): void {
 }
 
 /**
+ * 格式化外部链接URL
+ * 确保外部链接有正确的协议前缀
+ */
+function formatExternalUrl(url: string): string {
+  if (!url) return '';
+  
+  // 如果已经有协议前缀，直接返回
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // 如果以 // 开头，添加 https:
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
+  
+  // 否则添加 https:// 前缀
+  return `https://${url}`;
+}
+
+/**
  * 处理轮播图点击
  */
 function handleBannerClick(banner: BannerInfo): void {
   console.log('[BannerCarousel] 点击轮播图:', banner.title, banner);
   console.log('[BannerCarousel] 当前activeBanners数量:', activeBanners.value.length);
+  
+  // 如果没有配置链接URL，不执行跳转
+  if (!banner.linkUrl || banner.linkUrl.trim() === '') {
+    console.log('[BannerCarousel] 未配置跳转链接，不执行跳转');
+    emit('click', banner);
+    return;
+  }
   
   emit('click', banner);
 
@@ -164,11 +194,13 @@ function handleBannerClick(banner: BannerInfo): void {
       router.push(banner.linkUrl);
       break;
 
-    case 'external':
+    case 'external': {
       // 外部链接（新标签页打开）
-      console.log('[BannerCarousel] 外部跳转:', banner.linkUrl);
-      window.open(banner.linkUrl, '_blank', 'noopener,noreferrer');
+      const formattedUrl = formatExternalUrl(banner.linkUrl);
+      console.log('[BannerCarousel] 外部跳转:', formattedUrl);
+      window.open(formattedUrl, '_blank', 'noopener,noreferrer');
       break;
+    }
 
     case 'category':
       // 分类页面
@@ -183,7 +215,7 @@ function handleBannerClick(banner: BannerInfo): void {
       break;
 
     default:
-      console.warn('Unknown link type:', banner.linkType);
+      console.warn('[BannerCarousel] 未知链接类型:', banner.linkType);
   }
   
   console.log('[BannerCarousel] 跳转完成');

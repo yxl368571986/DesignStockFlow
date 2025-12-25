@@ -293,8 +293,12 @@ service.interceptors.response.use(
 
       // 特殊错误码处理
       if (res.code === 401) {
-        // 401错误，验证Token是否真的过期
-        handleUnauthorizedError();
+        // 登录接口的401不触发自动跳转，由登录页面自己处理
+        const url = response.config.url || '';
+        if (!url.includes('/auth/login')) {
+          // 401错误，验证Token是否真的过期
+          handleUnauthorizedError();
+        }
       } else if (res.code === 403) {
         ElMessage.error('没有权限访问');
       }
@@ -312,10 +316,14 @@ service.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       const message = error.response.data?.msg || '请求失败';
+      const url = error.config?.url || '';
 
       switch (status) {
         case 401:
-          handleUnauthorizedError();
+          // 登录接口的401不触发自动跳转，由登录页面自己处理
+          if (!url.includes('/auth/login')) {
+            handleUnauthorizedError();
+          }
           break;
         case 403:
           ElMessage.error('没有权限访问');

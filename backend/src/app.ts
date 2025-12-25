@@ -182,10 +182,30 @@ import systemSettingsRoutes from '@/routes/systemSettings.js';
 app.use('/api/v1/admin/settings', systemSettingsRoutes);
 logger.info('⚙️ Admin settings routes loaded');
 
+// 管理员角色管理路由
+import roleRoutes from '@/routes/role.js';
+app.use('/api/v1/admin/roles', roleRoutes);
+logger.info('🔑 Admin roles routes loaded');
+
+// 管理员权限管理路由
+import permissionRoutes from '@/routes/permission.js';
+app.use('/api/v1/admin/permissions', permissionRoutes);
+logger.info('🛡️ Admin permissions routes loaded');
+
 // 支付路由
 import paymentRoutes from '@/routes/payment.js';
 app.use('/api/v1/payment', paymentRoutes);
 logger.info('💳 Payment routes loaded');
+
+// 管理后台VIP路由
+import adminVipRoutes from '@/routes/adminVip.js';
+app.use('/api/v1/admin/vip', adminVipRoutes);
+logger.info('💎 Admin VIP routes loaded');
+
+// 管理后台安全路由
+import adminSecurityRoutes from '@/routes/adminSecurity.js';
+app.use('/api/v1/admin/security', adminSecurityRoutes);
+logger.info('🔒 Admin security routes loaded');
 
 // 公共内容路由
 import contentRoutes from '@/routes/content.js';
@@ -204,6 +224,10 @@ startVipScheduler();
 // 启动支付定时任务
 import { startPaymentScheduler } from '@/services/paymentScheduler.js';
 startPaymentScheduler();
+
+// 启动VIP支付系统定时任务 (Phase 4)
+import { startAllTasks } from '@/tasks/index.js';
+startAllTasks();
 
 // 测试路由（仅开发环境）
 if (config.server.env === 'development') {

@@ -202,6 +202,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Bell, Close, TrendCharts, Star, ArrowRight, Connection } from '@element-plus/icons-vue';
 import { useConfigStore } from '@/pinia/configStore';
+import { useUserStore } from '@/pinia/userStore';
 import { useDownload } from '@/composables/useDownload';
 import { useOffline } from '@/composables/useOffline';
 import { getHotResources, getRecommendedResources, collectResource } from '@/api/resource';
@@ -215,6 +216,7 @@ import Empty from '@/components/common/Empty.vue';
 // ========== Composables ==========
 const router = useRouter();
 const configStore = useConfigStore();
+const userStore = useUserStore();
 const { handleDownload } = useDownload();
 const { isOnline, isOfflineMode, cachedResources, cacheResources } = useOffline();
 
@@ -368,6 +370,16 @@ async function handleResourceDownload(resourceId: string): Promise<void> {
  */
 async function handleResourceCollect(resourceId: string): Promise<void> {
   console.log('收藏资源:', resourceId);
+
+  // 检查用户是否已登录
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('未登录，请先登录');
+    // 延迟跳转，让用户看到提示，并携带重定向参数
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent('/')}`);
+    }, 500);
+    return;
+  }
 
   try {
     const res = await collectResource(resourceId);

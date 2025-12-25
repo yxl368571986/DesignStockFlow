@@ -24,7 +24,7 @@
       "@config/*": ["config/*"],
       "@types/*": ["types/*"]
     },
-    "types": ["node"],
+    "types": ["node", "@types/jest"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true

@@ -61,8 +61,61 @@ export {
 } from './personal';
 export { getUserInfo } from './personal';
 
-// VIP相关
-export * from './vip';
+// VIP相关 - 排除与statistics重复的getDownloadStats
+export {
+  getVipPackages,
+  getVipPrivileges,
+  getUserVipInfo,
+  getAllVipPackages,
+  createVipPackage,
+  updateVipPackage,
+  deleteVipPackage,
+  getAllVipPrivileges,
+  updateVipPrivilege,
+  getVipOrders,
+  getVipOrderById,
+  refundVipOrder,
+  getVipStatistics,
+  adjustUserVip,
+  createVipOrder,
+  getUserOrders,
+  getOrderDetail,
+  cancelOrder,
+  initiatePayment,
+  getPaymentStatus,
+  requestRefund,
+  getPointsExchangeInfo,
+  exchangePointsForVip,
+  getPointsExchangeRecords,
+  sendSecondaryAuthCode,
+  verifySecondaryAuthCode,
+  getUserDevices,
+  kickDevice,
+  checkDownloadPermission,
+  getUserNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getUnreadNotificationCount
+} from './vip';
+export { getDownloadStats as getVipDownloadStats } from './vip';
+export type {
+  VipPackage,
+  VipPrivilege,
+  UserVipInfo,
+  CreateOrderRequest,
+  CreateOrderResponse,
+  PaymentResponse,
+  PaymentStatusResponse,
+  RefundRequest,
+  PointsExchangeInfo,
+  PointsExchangeRequest,
+  SecondaryAuthRequest,
+  DeviceInfo,
+  DownloadPermission,
+  VipOrder,
+  VipStatistics,
+  Notification
+} from './vip';
 
 // 积分相关
 export * from './points';

@@ -15,7 +15,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import { useResourceStore } from '@/pinia/resourceStore';
+import { useUserStore } from '@/pinia/userStore';
+import { collectResource } from '@/api/resource';
 import SearchBar from '@/components/business/SearchBar.vue';
 import ResourceCard from '@/components/business/ResourceCard.vue';
 import Loading from '@/components/common/Loading.vue';
@@ -29,6 +32,7 @@ import { Filter } from '@element-plus/icons-vue';
 const route = useRoute();
 const router = useRouter();
 const resourceStore = useResourceStore();
+const userStore = useUserStore();
 
 // 本地状态
 const showFilterDrawer = ref(false); // 是否显示筛选抽屉（移动端）
@@ -227,9 +231,31 @@ function handleDownload(resourceId: string) {
  * 处理收藏
  * @param resourceId 资源ID
  */
-function handleCollect(resourceId: string) {
+async function handleCollect(resourceId: string) {
   console.log('收藏资源:', resourceId);
-  // TODO: 实现收藏逻辑
+  
+  // 检查用户是否已登录
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('未登录，请先登录');
+    // 延迟跳转，让用户看到提示，并携带重定向参数
+    const currentPath = route.fullPath;
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }, 500);
+    return;
+  }
+
+  try {
+    const res = await collectResource(resourceId);
+    if (res.code === 200) {
+      ElMessage.success('收藏成功');
+    } else {
+      ElMessage.error(res.msg || '收藏失败');
+    }
+  } catch (error) {
+    console.error('收藏失败:', error);
+    ElMessage.error('收藏失败，请稍后重试');
+  }
 }
 
 /**

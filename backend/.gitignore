@@ -39,6 +39,7 @@ temp/
 *.pem
 *.key
 *.crt
+certs/
 
 # Database
 *.db

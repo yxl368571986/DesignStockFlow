@@ -20,6 +20,22 @@ import {
   refundVipOrder,
   getVipStatistics,
 } from '@/controllers/vipController.js';
+import {
+  createVipOrder,
+  initiatePayment,
+  getPaymentStatus,
+  getUserOrders,
+  getOrderDetail,
+  cancelOrder,
+  requestRefund,
+  sendSecondaryAuthCode,
+  verifySecondaryAuthCode,
+} from '@/controllers/vipPaymentController.js';
+import {
+  getPointsExchangeInfo,
+  exchangePointsForVip,
+  getExchangeRecords,
+} from '@/controllers/pointsExchangeController.js';
 import { authenticate as authenticateToken } from '@/middlewares/auth.js';
 
 const router = Router();
@@ -36,6 +52,54 @@ router.get('/privileges', getVipPrivileges);
 
 // GET /api/v1/vip/my-info - 获取用户VIP信息（需要登录）
 router.get('/my-info', authenticateToken, getUserVipInfo);
+
+/**
+ * VIP订单接口 (Task 3.2)
+ */
+
+// POST /api/v1/vip/orders - 创建VIP订单
+router.post('/orders', authenticateToken, createVipOrder);
+
+// GET /api/v1/vip/orders - 获取用户订单列表
+router.get('/orders', authenticateToken, getUserOrders);
+
+// GET /api/v1/vip/orders/:orderNo - 获取订单详情
+router.get('/orders/:orderNo', authenticateToken, getOrderDetail);
+
+// POST /api/v1/vip/orders/:orderNo/pay - 发起支付
+router.post('/orders/:orderNo/pay', authenticateToken, initiatePayment);
+
+// GET /api/v1/vip/orders/:orderNo/status - 查询支付状态
+router.get('/orders/:orderNo/status', authenticateToken, getPaymentStatus);
+
+// POST /api/v1/vip/orders/:orderNo/cancel - 取消订单
+router.post('/orders/:orderNo/cancel', authenticateToken, cancelOrder);
+
+// POST /api/v1/vip/orders/:orderNo/refund - 申请退款
+router.post('/orders/:orderNo/refund', authenticateToken, requestRefund);
+
+/**
+ * 积分兑换接口 (Task 3.3)
+ */
+
+// GET /api/v1/vip/points-exchange/info - 获取积分兑换信息
+router.get('/points-exchange/info', authenticateToken, getPointsExchangeInfo);
+
+// POST /api/v1/vip/points-exchange - 积分兑换VIP
+router.post('/points-exchange', authenticateToken, exchangePointsForVip);
+
+// GET /api/v1/vip/points-exchange/records - 获取兑换记录
+router.get('/points-exchange/records', authenticateToken, getExchangeRecords);
+
+/**
+ * 二次验证接口 (Task 3.4)
+ */
+
+// POST /api/v1/vip/auth/send-code - 发送二次验证码
+router.post('/auth/send-code', authenticateToken, sendSecondaryAuthCode);
+
+// POST /api/v1/vip/auth/verify-code - 验证二次验证码
+router.post('/auth/verify-code', authenticateToken, verifySecondaryAuthCode);
 
 /**
  * 管理员VIP接口

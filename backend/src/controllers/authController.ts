@@ -58,7 +58,15 @@ export class AuthController {
     } catch (err: unknown) {
       logger.error('登录失败:', err);
       const message = err instanceof Error ? err.message : '登录失败';
-      error(res, message, 401);
+      const errorCode = (err as Error & { code?: string })?.code;
+      
+      // 返回带错误码的响应，便于前端区分错误类型
+      res.status(401).json({
+        code: 401,
+        msg: message,
+        data: null,
+        errorCode: errorCode || 'LOGIN_FAILED'
+      });
     }
   }
 

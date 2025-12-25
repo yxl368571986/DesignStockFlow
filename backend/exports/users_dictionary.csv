@@ -1,0 +1,17 @@
+field,meaning,type,sensitivity
+user_id,用户唯一ID,string,normal
+phone_masked,手机号脱敏,string,sensitive
+email_masked,邮箱脱敏,string,sensitive
+nickname,用户昵称,string,normal
+avatar,头像URL,string,normal
+bio,个人简介,string,normal
+user_level,用户等级,int,normal
+vip_level,会员等级,int,normal
+vip_expire_at,会员到期时间,timestamp,normal
+points_balance,积分余额,int,normal
+points_total,累计积分,int,normal
+role_id,角色ID,string,normal
+status,状态,int,normal
+created_at,注册时间,timestamp,normal
+updated_at,更新时间,timestamp,normal
+last_login_at,最后登录时间,timestamp,normal

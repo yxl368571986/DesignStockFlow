@@ -15,7 +15,7 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/pinia/userStore';
@@ -32,6 +32,7 @@ import type { UserPointsInfo } from '@/api/points';
 import DownloadButton from '@/components/business/DownloadButton.vue';
 import ResourceCard from '@/components/business/ResourceCard.vue';
 import Loading from '@/components/common/Loading.vue';
+import VipPromotionDialog from '@/components/business/VipPromotionDialog.vue';
 import {
   Star,
   StarFilled,
@@ -285,6 +286,11 @@ const pointsDeficit = computed(() => {
   return pointsCost.value - pointsBalance.value;
 });
 
+/**
+ * 是否显示VIP推广弹窗
+ */
+const showVipPromotion = ref(false);
+
 // ========== 方法 ==========
 
 /**
@@ -385,6 +391,17 @@ function handleCloseViewer() {
 async function handleCollect() {
   if (!resource.value) return;
 
+  // 检查用户是否已登录
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('未登录，请先登录');
+    // 延迟跳转，让用户看到提示，并携带重定向参数
+    const currentPath = route.fullPath;
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }, 500);
+    return;
+  }
+
   collectLoading.value = true;
   try {
     if (isCollected.value) {
@@ -428,17 +445,80 @@ function handleDownloadSuccess() {
  * 处理下载失败
  */
 function handleDownloadError(error: string) {
-  ElMessage.error(error);
+  // 如果是VIP权限问题，显示VIP推广弹窗
+  if (error === '需要VIP权限') {
+    showVipPromotion.value = true;
+  } else {
+    ElMessage.error(error);
+  }
 }
 
 /**
  * 处理推荐资源点击
+ * 使用 replace 而不是 push，避免历史记录堆积
+ * 数据刷新由 watch 监听 resourceId 变化来处理
  */
 function handleRecommendedClick(resourceId: string) {
   // 跳转到新的资源详情页
   router.push(`/resource/${resourceId}`);
-  // 滚动到顶部
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // 注意：滚动到顶部由 watch 中的 fetchResourceDetail 完成后处理
+}
+
+/**
+ * 处理推荐资源下载
+ */
+async function handleRecommendedDownload(resourceId: string) {
+  // 查找资源信息
+  const targetResource = recommendedResources.value.find(
+    (r) => r.resourceId === resourceId
+  );
+
+  if (!targetResource) {
+    ElMessage.error('资源不存在');
+    return;
+  }
+
+  // 检查用户是否已登录
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('未登录，请先登录');
+    // 保存当前页面路径，登录后返回
+    const currentPath = route.fullPath;
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }, 500);
+    return;
+  }
+
+  // 这里可以调用下载逻辑，暂时只显示提示
+  ElMessage.info('下载功能请点击进入详情页后操作');
+}
+
+/**
+ * 处理推荐资源收藏
+ */
+async function handleRecommendedCollect(resourceId: string) {
+  // 检查用户是否已登录
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('未登录，请先登录');
+    // 保存当前页面路径，登录后返回
+    const currentPath = route.fullPath;
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }, 500);
+    return;
+  }
+
+  try {
+    const res = await collectResource(resourceId);
+    if (res.code === 200) {
+      ElMessage.success('收藏成功');
+    } else {
+      ElMessage.error(res.msg || '收藏失败');
+    }
+  } catch (error) {
+    console.error('收藏失败:', error);
+    ElMessage.error('收藏失败，请稍后重试');
+  }
 }
 
 /**
@@ -467,6 +547,26 @@ function handleGoToPoints() {
 onMounted(() => {
   fetchResourceDetail();
 });
+
+// 监听路由参数变化，当从相关推荐点击进入新资源时重新加载数据
+watch(
+  () => route.params.id,
+  (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      // 重置状态
+      currentImageIndex.value = 0;
+      isCollected.value = false;
+      recommendedResources.value = [];
+      userPointsInfo.value = null;
+      
+      // 滚动到顶部
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // 重新获取数据
+      fetchResourceDetail();
+    }
+  }
+);
 </script>
 
 <template>
@@ -770,6 +870,8 @@ onMounted(() => {
             :resource="item"
             :show-actions="true"
             @click="handleRecommendedClick"
+            @download="handleRecommendedDownload"
+            @collect="handleRecommendedCollect"
           />
         </div>
       </div>
@@ -782,6 +884,13 @@ onMounted(() => {
       :initial-index="currentImageIndex"
       :hide-on-click-modal="true"
       @close="handleCloseViewer"
+    />
+
+    <!-- VIP推广弹窗 -->
+    <VipPromotionDialog
+      v-model:visible="showVipPromotion"
+      :resource-id="resource?.resourceId"
+      :resource-title="resource?.title"
     />
   </div>
 </template>

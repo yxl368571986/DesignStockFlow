@@ -2,3 +2,4 @@
 export * from './userStore';
 export * from './resourceStore';
 export * from './configStore';
+export * from './vipStore';

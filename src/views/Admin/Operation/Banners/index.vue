@@ -168,17 +168,39 @@
             v-model="formData.linkUrl"
             placeholder="请输入链接地址"
             :prefix-icon="Link"
+            @blur="handleLinkUrlBlur"
           >
-            <template #append v-if="formData.linkType === 'external'">
-              <el-button :icon="View" @click="previewLink">预览</el-button>
+            <template
+              v-if="formData.linkType === 'external'"
+              #append
+            >
+              <el-button
+                :icon="View"
+                @click="previewLink"
+              >
+                预览
+              </el-button>
             </template>
           </el-input>
+          <!-- 链接验证提示 -->
+          <div
+            v-if="linkValidationTip"
+            class="link-validation-tip"
+            :class="linkValidationTip.type"
+          >
+            <el-icon>
+              <WarningFilled v-if="linkValidationTip.type === 'warning'" />
+              <SuccessFilled v-else-if="linkValidationTip.type === 'success'" />
+              <InfoFilled v-else />
+            </el-icon>
+            <span>{{ linkValidationTip.message }}</span>
+          </div>
           <div class="form-tip">
             <template v-if="formData.linkType === 'internal'">
-              例如：/resources、/vip、/about
+              例如：/resources、/vip、/about（必须以 / 开头）
             </template>
             <template v-else-if="formData.linkType === 'external'">
-              例如：https://www.example.com
+              例如：https://www.example.com 或 www.example.com（系统会自动补全协议）
             </template>
             <template v-else-if="formData.linkType === 'category'">
               例如：/resources?category=ui-design
@@ -232,7 +254,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Plus, Edit, Delete, Picture, Link, View } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Picture, Link, View, WarningFilled, SuccessFilled, InfoFilled } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import {
   getAdminBannerList,
@@ -280,6 +302,9 @@ const bannerList = ref<BannerItem[]>([]);
 const dialogVisible = ref(false);
 const dialogTitle = computed(() => formData.bannerId ? '编辑轮播图' : '添加轮播图');
 const submitting = ref(false);
+
+// 链接验证提示
+const linkValidationTip = ref<{ type: 'success' | 'warning' | 'info'; message: string } | null>(null);
 
 // 表单引用和数据
 const formRef = ref<FormInstance>();
@@ -419,6 +444,160 @@ const handleStatusChange = async (row: BannerItem) => {
   }
 };
 
+/**
+ * 格式化外部链接URL
+ * 确保外部链接有正确的协议前缀
+ */
+const formatExternalUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // 如果已经有协议前缀，直接返回
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // 如果以 // 开头，添加 https:
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
+  
+  // 否则添加 https:// 前缀
+  return `https://${url}`;
+};
+
+/**
+ * 验证链接格式是否正确
+ */
+const validateLinkUrl = (url: string, linkType: string): { valid: boolean; message: string; autoFixed?: string } => {
+  if (!url || url.trim() === '') {
+    return { valid: false, message: '链接地址不能为空' };
+  }
+
+  const trimmedUrl = url.trim();
+
+  switch (linkType) {
+    case 'internal':
+      // 站内链接必须以 / 开头
+      if (!trimmedUrl.startsWith('/')) {
+        return { 
+          valid: false, 
+          message: '站内链接必须以 / 开头，例如：/vip、/resources',
+          autoFixed: `/${trimmedUrl}`
+        };
+      }
+      return { valid: true, message: '链接格式正确' };
+
+    case 'external':
+      // 外部链接验证
+      // 检查是否已有协议
+      if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+        // 验证URL格式
+        try {
+          new URL(trimmedUrl);
+          return { valid: true, message: '链接格式正确' };
+        } catch {
+          return { valid: false, message: '链接格式不正确，请检查URL是否完整' };
+        }
+      }
+      
+      // 检查是否是类似 www.xxx.com 或 xxx.com 的格式
+      const domainPattern = /^(www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*(\.[a-zA-Z0-9][-a-zA-Z0-9]*)+/;
+      if (domainPattern.test(trimmedUrl)) {
+        const fixedUrl = `https://${trimmedUrl}`;
+        return { 
+          valid: true, 
+          message: `检测到网址格式，已自动补全为：${fixedUrl}`,
+          autoFixed: fixedUrl
+        };
+      }
+      
+      // 其他情况，尝试添加协议后验证
+      const testUrl = `https://${trimmedUrl}`;
+      try {
+        new URL(testUrl);
+        return { 
+          valid: true, 
+          message: `已自动补全协议：${testUrl}`,
+          autoFixed: testUrl
+        };
+      } catch {
+        return { 
+          valid: false, 
+          message: '链接格式不正确，请输入完整的网址，例如：https://www.example.com 或 www.example.com' 
+        };
+      }
+
+    case 'category':
+      // 分类链接验证
+      if (!trimmedUrl.startsWith('/')) {
+        return { 
+          valid: false, 
+          message: '分类链接必须以 / 开头',
+          autoFixed: `/${trimmedUrl}`
+        };
+      }
+      return { valid: true, message: '链接格式正确' };
+
+    case 'resource':
+      // 资源链接验证
+      if (!trimmedUrl.startsWith('/')) {
+        return { 
+          valid: false, 
+          message: '资源链接必须以 / 开头',
+          autoFixed: `/${trimmedUrl}`
+        };
+      }
+      return { valid: true, message: '链接格式正确' };
+
+    default:
+      return { valid: true, message: '' };
+  }
+};
+
+/**
+ * 处理链接输入框失焦事件
+ * 进行链接验证和自动补全
+ */
+const handleLinkUrlBlur = () => {
+  if (!formData.linkUrl || formData.linkUrl.trim() === '') {
+    linkValidationTip.value = null;
+    return;
+  }
+
+  const result = validateLinkUrl(formData.linkUrl, formData.linkType);
+  
+  if (result.autoFixed) {
+    // 自动补全链接
+    formData.linkUrl = result.autoFixed;
+    linkValidationTip.value = {
+      type: 'success',
+      message: result.message
+    };
+    // 3秒后清除提示
+    setTimeout(() => {
+      if (linkValidationTip.value?.type === 'success') {
+        linkValidationTip.value = null;
+      }
+    }, 3000);
+  } else if (result.valid) {
+    linkValidationTip.value = {
+      type: 'success',
+      message: result.message
+    };
+    // 2秒后清除成功提示
+    setTimeout(() => {
+      if (linkValidationTip.value?.type === 'success') {
+        linkValidationTip.value = null;
+      }
+    }, 2000);
+  } else {
+    linkValidationTip.value = {
+      type: 'warning',
+      message: result.message
+    };
+  }
+};
+
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return;
@@ -434,11 +613,17 @@ const handleSubmit = async () => {
 
     submitting.value = true;
 
+    // 处理链接URL - 如果是外部链接，确保有协议前缀
+    let processedLinkUrl = formData.linkUrl;
+    if (formData.linkType === 'external') {
+      processedLinkUrl = formatExternalUrl(formData.linkUrl);
+    }
+
     // 构建提交数据
     const submitData: BannerFormData = {
       title: formData.title,
       imageUrl: formData.imageUrl,
-      linkUrl: formData.linkUrl,
+      linkUrl: processedLinkUrl,
       linkType: formData.linkType,
       sortOrder: formData.sortOrder,
       startTime: formData.timeRange[0],
@@ -511,7 +696,11 @@ const beforeUpload = (file: File) => {
 // 预览链接
 const previewLink = () => {
   if (formData.linkUrl) {
-    window.open(formData.linkUrl, '_blank');
+    // 如果是外部链接，确保有协议前缀
+    const url = formData.linkType === 'external' 
+      ? formatExternalUrl(formData.linkUrl) 
+      : formData.linkUrl;
+    window.open(url, '_blank');
   } else {
     ElMessage.warning('请先输入链接地址');
   }
@@ -522,6 +711,8 @@ const resetForm = () => {
   if (formRef.value) {
     formRef.value.resetFields();
   }
+  // 清除链接验证提示
+  linkValidationTip.value = null;
   Object.assign(formData, {
     bannerId: undefined,
     title: '',
@@ -699,6 +890,41 @@ onMounted(() => {
     font-size: 12px;
     color: #999;
     margin-top: 4px;
+  }
+
+  // 链接验证提示样式
+  .link-validation-tip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+
+    .el-icon {
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    &.success {
+      background-color: #f0f9eb;
+      color: #67c23a;
+      border: 1px solid #e1f3d8;
+    }
+
+    &.warning {
+      background-color: #fdf6ec;
+      color: #e6a23c;
+      border: 1px solid #faecd8;
+    }
+
+    &.info {
+      background-color: #f4f4f5;
+      color: #909399;
+      border: 1px solid #e9e9eb;
+    }
   }
 }
 

@@ -38,105 +38,6 @@ function isCacheValid(cache: CacheData | null): boolean {
   return now - cache.timestamp < CACHE_DURATION;
 }
 
-/**
- * 计算时间因子（用于综合排序）
- * @param createdAt 创建时间
- * @returns 时间因子（0-1000）
- */
-function calculateTimeFactor(createdAt: string): number {
-  const now = new Date();
-  const created = new Date(createdAt);
-  const daysSinceCreation = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-  
-  if (daysSinceCreation <= 7) {
-    // 7天内: 时间因子 = 1000
-    return 1000;
-  } else if (daysSinceCreation <= 30) {
-    // 8-30天: 时间因子线性递减 1000 -> 500
-    return 1000 - (daysSinceCreation - 7) * (500 / 23);
-  } else if (daysSinceCreation <= 90) {
-    // 31-90天: 时间因子线性递减 500 -> 100
-    return 500 - (daysSinceCreation - 30) * (400 / 60);
-  } else {
-    // 90天以上: 时间因子 = 0
-    return 0;
-  }
-}
-
-/**
- * 计算综合评分
- * @param resource 资源信息
- * @returns 综合评分
- */
-function calculateComprehensiveScore(resource: ResourceInfo): number {
-  const downloadWeight = 0.4;
-  const viewWeight = 0.2;
-  const collectWeight = 0.3;
-  const timeWeight = 0.1;
-  
-  const downloadScore = (resource.downloadCount || 0) * downloadWeight;
-  const viewScore = (resource.viewCount || 0) * viewWeight;
-  const collectScore = (resource.collectCount || 0) * collectWeight;
-  const timeScore = calculateTimeFactor(resource.createdAt || resource.createTime) * timeWeight;
-  
-  return downloadScore + viewScore + collectScore + timeScore;
-}
-
-/**
- * 对资源列表进行排序
- * @param resources 资源列表
- * @param sortType 排序类型
- * @returns 排序后的资源列表
- */
-function sortResources(resources: ResourceInfo[], sortType: string): ResourceInfo[] {
-  const sorted = [...resources];
-  
-  switch (sortType) {
-    case 'comprehensive':
-      // 综合排序：按综合评分降序
-      sorted.sort((a, b) => {
-        const scoreA = calculateComprehensiveScore(a);
-        const scoreB = calculateComprehensiveScore(b);
-        return scoreB - scoreA;
-      });
-      break;
-      
-    case 'download':
-      // 最多下载：按下载量降序
-      sorted.sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0));
-      break;
-      
-    case 'latest':
-      // 最新发布：按创建时间降序
-      sorted.sort((a, b) => {
-        const timeA = new Date(a.createdAt || a.createTime).getTime();
-        const timeB = new Date(b.createdAt || b.createTime).getTime();
-        return timeB - timeA;
-      });
-      break;
-      
-    case 'like':
-      // 最多好评：按点赞数降序
-      sorted.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
-      break;
-      
-    case 'collect':
-      // 最多收藏：按收藏数降序
-      sorted.sort((a, b) => (b.collectCount || 0) - (a.collectCount || 0));
-      break;
-      
-    default:
-      // 默认按创建时间降序
-      sorted.sort((a, b) => {
-        const timeA = new Date(a.createdAt || a.createTime).getTime();
-        const timeB = new Date(b.createdAt || b.createTime).getTime();
-        return timeB - timeA;
-      });
-  }
-  
-  return sorted;
-}
-
 export const useResourceStore = defineStore('resource', () => {
   // ========== 状态 (State) ==========
 
@@ -170,7 +71,7 @@ export const useResourceStore = defineStore('resource', () => {
     vipLevel: undefined,
     sortType: 'comprehensive',
     pageNum: 1,
-    pageSize: 20
+    pageSize: 21
   });
 
   /**
@@ -275,13 +176,8 @@ export const useResourceStore = defineStore('resource', () => {
       const response = await getResourceList(searchParams.value);
 
       if (response.code === 200 && response.data) {
-        // 更新状态
-        let resourceList = response.data.list;
-        
-        // 前端排序逻辑
-        resourceList = sortResources(resourceList, searchParams.value.sortType || 'comprehensive');
-        
-        resources.value = resourceList;
+        // 更新状态 - 后端已经处理了排序和分页，直接使用返回的数据
+        resources.value = response.data.list;
         total.value = response.data.total;
 
         // 保存到内存缓存
@@ -324,20 +220,34 @@ export const useResourceStore = defineStore('resource', () => {
    * @param autoFetch 是否自动获取数据，默认true
    */
   function updateSearchParams(updates: Partial<SearchParams>, autoFetch: boolean = true): void {
+    // 检查是否只更新了分页参数
+    const isOnlyPaginationUpdate = 
+      (updates.pageNum !== undefined || updates.pageSize !== undefined) &&
+      updates.keyword === undefined &&
+      updates.categoryId === undefined &&
+      updates.format === undefined &&
+      updates.vipLevel === undefined &&
+      updates.sortType === undefined;
+
+    // 如果更新了筛选条件（非分页），且没有显式传入pageNum，则重置页码
+    const shouldResetPage = !isOnlyPaginationUpdate && 
+      updates.pageNum === undefined &&
+      (
+        updates.keyword !== undefined ||
+        updates.categoryId !== undefined ||
+        updates.format !== undefined ||
+        updates.vipLevel !== undefined ||
+        updates.sortType !== undefined
+      );
+
     // 更新参数
     searchParams.value = {
       ...searchParams.value,
       ...updates
     };
 
-    // 如果更新了筛选条件（非分页），重置页码
-    if (
-      updates.keyword !== undefined ||
-      updates.categoryId !== undefined ||
-      updates.format !== undefined ||
-      updates.vipLevel !== undefined ||
-      updates.sortType !== undefined
-    ) {
+    // 重置页码（仅当筛选条件变化且未显式传入pageNum时）
+    if (shouldResetPage) {
       searchParams.value.pageNum = 1;
     }
 
@@ -359,7 +269,7 @@ export const useResourceStore = defineStore('resource', () => {
       vipLevel: undefined,
       sortType: 'comprehensive',
       pageNum: 1,
-      pageSize: 20
+      pageSize: 21
     };
 
     // 清空资源列表
@@ -519,7 +429,7 @@ export const useResourceStore = defineStore('resource', () => {
       vipLevel: undefined,
       sortType: 'comprehensive',
       pageNum: 1,
-      pageSize: 20
+      pageSize: 21
     };
     cache.value.clear();
   }

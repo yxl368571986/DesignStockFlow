@@ -172,11 +172,10 @@ class ResourceService {
           break;
       }
 
+      // 获取资源数据
       const [resources, total] = await Promise.all([
         prisma.resources.findMany({
           where,
-          skip,
-          take: sortBy === 'comprehensive' ? pageSize * 3 : take,
           orderBy,
           select: {
             resource_id: true,
@@ -199,6 +198,7 @@ class ResourceService {
         prisma.resources.count({ where }),
       ]);
 
+      // 对于综合排序，需要在内存中计算评分并排序
       let sortedResources = resources;
       if (sortBy === 'comprehensive') {
         const resourcesWithScore = resources.map(resource => ({
@@ -207,11 +207,14 @@ class ResourceService {
         }));
         
         resourcesWithScore.sort((a, b) => b.score - a.score);
-        sortedResources = resourcesWithScore.slice(skip, skip + take);
+        sortedResources = resourcesWithScore;
       }
+      
+      // 应用分页 - 在排序后进行分页
+      const paginatedResources = sortedResources.slice(skip, skip + take);
 
       const list: ResourceListItem[] = await Promise.all(
-        sortedResources.map(async (resource) => {
+        paginatedResources.map(async (resource) => {
           const item: ResourceListItem = {
             resourceId: resource.resource_id,
             title: resource.title,

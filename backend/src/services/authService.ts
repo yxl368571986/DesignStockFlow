@@ -129,7 +129,9 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error('手机号或密码错误');
+      const err = new Error('账号不存在，请检查后重新输入');
+      (err as Error & { code: string }).code = 'ACCOUNT_NOT_FOUND';
+      throw err;
     }
 
     // 2. 检查用户状态
@@ -140,7 +142,9 @@ export class AuthService {
     // 3. 验证密码
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
-      throw new Error('手机号或密码错误');
+      const err = new Error('密码错误，请重新输入');
+      (err as Error & { code: string }).code = 'PASSWORD_INCORRECT';
+      throw err;
     }
 
     // 4. 更新最后登录时间

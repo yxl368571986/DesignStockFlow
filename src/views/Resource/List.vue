@@ -120,7 +120,9 @@ const hasResources = computed(() => resourceStore.hasResources);
 const currentPage = computed({
   get: () => resourceStore.searchParams.pageNum,
   set: (value: number) => {
-    resourceStore.setPageNum(value);
+    // 只更新store中的pageNum，不触发fetchResources
+    // 因为updateURL会触发路由变化，watch会处理数据获取
+    resourceStore.updateSearchParams({ pageNum: value }, false);
     updateURL();
   }
 });
@@ -131,7 +133,9 @@ const currentPage = computed({
 const pageSize = computed({
   get: () => resourceStore.searchParams.pageSize,
   set: (value: number) => {
-    resourceStore.setPageSize(value);
+    // 只更新store中的pageSize，不触发fetchResources
+    // 因为updateURL会触发路由变化，watch会处理数据获取
+    resourceStore.updateSearchParams({ pageSize: value }, false);
     updateURL();
   }
 });
@@ -316,8 +320,12 @@ function handleDownload(resourceId: string) {
  */
 async function handleCollect(resourceId: string) {
   if (!userStore.isLoggedIn) {
-    ElMessage.warning('请先登录');
-    router.push('/login');
+    ElMessage.warning('未登录，请先登录');
+    // 延迟跳转，让用户看到提示，并携带重定向参数
+    const currentPath = route.fullPath;
+    setTimeout(() => {
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+    }, 500);
     return;
   }
   
@@ -559,7 +567,7 @@ watch(
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
-        :page-sizes="[20, 40, 60, 80]"
+        :page-sizes="[21, 42, 63, 84]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"
         background

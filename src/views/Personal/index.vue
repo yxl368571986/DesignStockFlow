@@ -103,6 +103,27 @@
           v-loading="downloadLoading"
           class="tab-content"
         >
+          <!-- VIP推广入口（非VIP用户显示） -->
+          <div
+            v-if="!userStore.isVIP"
+            class="vip-promotion-banner"
+          >
+            <div class="banner-content">
+              <VipBadge :show-badge="false" />
+              <div class="banner-text">
+                <span class="banner-title">开通VIP，无限下载</span>
+                <span class="banner-desc">VIP会员每日可下载50次，畅享海量资源</span>
+              </div>
+            </div>
+            <el-button
+              type="warning"
+              size="small"
+              @click="handlePurchaseVIP"
+            >
+              立即开通
+            </el-button>
+          </div>
+          
           <div
             v-if="downloadList.length > 0"
             class="resource-grid"
@@ -213,45 +234,74 @@
           v-loading="vipLoading"
           class="tab-content vip-center"
         >
-          <div class="vip-status-card">
-            <div class="vip-level">
-              <el-icon
-                class="vip-icon"
-                :size="48"
-              >
-                <Star />
-              </el-icon>
-              <h2>{{ vipInfo.vipLevel > 0 ? `VIP ${vipLevelText}` : '普通用户' }}</h2>
-            </div>
-
-            <div
-              v-if="vipInfo.vipLevel > 0"
-              class="vip-info"
-            >
-              <div class="info-item">
-                <span class="label">到期时间：</span>
-                <span class="value">{{
-                  vipInfo.vipExpireTime ? formatTime(vipInfo.vipExpireTime) : '未知'
-                }}</span>
+          <!-- 使用VipStatusCard组件 -->
+          <VipStatusCard
+            :is-vip="vipInfo.vipLevel > 0"
+            :is-lifetime-vip="vipInfo.isLifetime"
+            :expire-at="vipInfo.vipExpireTime"
+            :days-remaining="vipDaysRemaining"
+            :privileges="vipInfo.privileges"
+            :show-privileges="true"
+          />
+          
+          <!-- VIP特权详情 -->
+          <div class="vip-privileges-detail">
+            <h3 class="section-title">
+              VIP会员特权
+            </h3>
+            <div class="privileges-grid">
+              <div class="privilege-card">
+                <div class="privilege-icon">
+                  <el-icon><Download /></el-icon>
+                </div>
+                <div class="privilege-info">
+                  <h4>无限下载</h4>
+                  <p>每日最多50次下载</p>
+                </div>
+              </div>
+              <div class="privilege-card">
+                <div class="privilege-icon">
+                  <el-icon><Star /></el-icon>
+                </div>
+                <div class="privilege-info">
+                  <h4>专属标识</h4>
+                  <p>金色VIP徽章</p>
+                </div>
+              </div>
+              <div class="privilege-card">
+                <div class="privilege-icon">
+                  <el-icon><Service /></el-icon>
+                </div>
+                <div class="privilege-info">
+                  <h4>优先客服</h4>
+                  <p>专属客服通道</p>
+                </div>
+              </div>
+              <div class="privilege-card">
+                <div class="privilege-icon">
+                  <el-icon><Discount /></el-icon>
+                </div>
+                <div class="privilege-info">
+                  <h4>积分兑换</h4>
+                  <p>积分可兑换VIP时长</p>
+                </div>
               </div>
             </div>
-
-            <div
-              v-else
-              class="vip-info"
-            >
-              <p class="tip">
-                开通VIP享受更多特权
-              </p>
-            </div>
-
+          </div>
+          
+          <!-- 快捷入口 -->
+          <div class="vip-quick-links">
             <el-button
-              type="warning"
-              size="large"
-              class="vip-btn"
+              type="primary"
               @click="handlePurchaseVIP"
             >
               {{ vipInfo.vipLevel > 0 ? '续费VIP' : '开通VIP' }}
+            </el-button>
+            <el-button @click="goToVipOrders">
+              我的订单
+            </el-button>
+            <el-button @click="goToDevices">
+              设备管理
             </el-button>
           </div>
         </div>
@@ -264,12 +314,14 @@
 import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Camera, Star, Coin, List, Plus } from '@element-plus/icons-vue';
+import { Camera, Star, Coin, List, Plus, Download, Service, Discount } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import { getDownloadHistory, getUploadHistory, getVIPInfo } from '@/api/personal';
 import { usePointsSync } from '@/composables/usePointsSync';
 import { formatTime, formatRelativeTime } from '@/utils/format';
 import { maskPhone } from '@/utils/security';
+import VipStatusCard from '@/components/business/VipStatusCard.vue';
+import VipBadge from '@/components/business/VipBadge.vue';
 import type { DownloadRecord, UploadRecord, VIPInfo } from '@/types/models';
 
 const router = useRouter();
@@ -309,6 +361,15 @@ const vipLevelText = computed(() => {
     3: '年度会员'
   };
   return levelMap[vipInfo.value.vipLevel] || '';
+});
+
+/** VIP剩余天数 */
+const vipDaysRemaining = computed(() => {
+  if (!vipInfo.value.vipExpireTime) return 0;
+  const expireDate = new Date(vipInfo.value.vipExpireTime);
+  const now = new Date();
+  const diffTime = expireDate.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 });
 
 const editProfileVisible = ref(false);
@@ -472,6 +533,14 @@ function handleEditAvatar() {
 
 function handlePurchaseVIP() {
   router.push('/vip');
+}
+
+function goToVipOrders() {
+  router.push('/vip/orders');
+}
+
+function goToDevices() {
+  router.push('/user/devices');
 }
 
 function goToPoints() {
@@ -758,55 +827,109 @@ onActivated(() => {
 }
 
 .vip-center {
-  .vip-status-card {
-    text-align: center;
-    padding: 48px;
-    background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
-    border-radius: 16px;
-    color: white;
-    margin-bottom: 32px;
+  .vip-privileges-detail {
+    margin-top: 24px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 
-    .vip-level {
-      margin-bottom: 24px;
-
-      .vip-icon {
-        margin-bottom: 16px;
-      }
-
-      h2 {
-        margin: 0;
-        font-size: 32px;
-        font-weight: 600;
-      }
-    }
-
-    .vip-info {
-      margin-bottom: 24px;
-
-      .info-item {
-        margin-bottom: 12px;
-        font-size: 16px;
-
-        .label {
-          opacity: 0.9;
-        }
-
-        .value {
-          font-weight: 500;
-        }
-      }
-
-      .tip {
-        font-size: 16px;
-        opacity: 0.9;
-      }
-    }
-
-    .vip-btn {
-      padding: 12px 48px;
+    .section-title {
       font-size: 16px;
-      font-weight: 500;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 16px 0;
     }
+
+    .privileges-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .privilege-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #f5f7fa;
+      border-radius: 8px;
+      transition: all 0.3s;
+
+      &:hover {
+        background: #e8f4ff;
+        transform: translateY(-2px);
+      }
+
+      .privilege-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        color: #fff;
+        font-size: 20px;
+      }
+
+      .privilege-info {
+        h4 {
+          margin: 0 0 4px 0;
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+        }
+
+        p {
+          margin: 0;
+          font-size: 12px;
+          color: #999;
+        }
+      }
+    }
+  }
+
+  .vip-quick-links {
+    margin-top: 24px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+}
+
+/* VIP推广横幅 */
+.vip-promotion-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  border: 1px solid #ffd54f;
+  border-radius: 12px;
+
+  .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .banner-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .banner-desc {
+    font-size: 13px;
+    color: #666;
   }
 }
 

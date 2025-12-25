@@ -142,6 +142,7 @@ export interface UploadRecord {
 export interface VIPInfo {
   vipLevel: number; // 0-普通, 1-月度, 2-季度, 3-年度
   vipExpireTime?: string;
+  isLifetime?: boolean; // 是否终身VIP
   downloadLimit: number; // 下载次数限制（-1表示无限制）
   downloadUsed: number; // 已使用下载次数
   privileges: string[]; // 特权列表

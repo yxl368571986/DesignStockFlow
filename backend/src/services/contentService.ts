@@ -138,6 +138,7 @@ export async function getPublicBanners() {
 
 /**
  * 获取公开的分类列表
+ * 实时计算每个分类下已审核通过且状态正常的资源数量
  */
 export async function getPublicCategories(parentId?: string) {
   try {
@@ -162,6 +163,33 @@ export async function getPublicCategories(parentId?: string) {
       },
     });
 
+    // 获取所有分类ID（包括子分类）
+    const allCategoryIds = categories.flatMap((cat) => [
+      cat.category_id,
+      ...cat.other_categories.map((child) => child.category_id),
+    ]);
+
+    // 实时计算每个分类的资源数量（只统计已审核通过且状态正常的资源）
+    const resourceCounts = await prisma.resources.groupBy({
+      by: ['category_id'],
+      where: {
+        category_id: { in: allCategoryIds },
+        audit_status: 1, // 已审核通过
+        status: 1, // 状态正常
+      },
+      _count: {
+        resource_id: true,
+      },
+    });
+
+    // 创建分类ID到资源数量的映射
+    const countMap = new Map<string, number>();
+    resourceCounts.forEach((item) => {
+      if (item.category_id) {
+        countMap.set(item.category_id, item._count.resource_id);
+      }
+    });
+
     return categories.map((cat) => ({
       categoryId: cat.category_id,
       categoryName: cat.category_name,
@@ -171,7 +199,7 @@ export async function getPublicCategories(parentId?: string) {
       sort: cat.sort_order,
       isHot: cat.is_hot,
       isRecommend: cat.is_recommend,
-      resourceCount: cat.resource_count,
+      resourceCount: countMap.get(cat.category_id) || 0,
       children: cat.other_categories.map((child) => ({
         categoryId: child.category_id,
         categoryName: child.category_name,
@@ -181,7 +209,7 @@ export async function getPublicCategories(parentId?: string) {
         sort: child.sort_order,
         isHot: child.is_hot,
         isRecommend: child.is_recommend,
-        resourceCount: child.resource_count,
+        resourceCount: countMap.get(child.category_id) || 0,
       })),
     }));
   } catch (error) {

@@ -38,6 +38,7 @@
         <el-form-item prop="phone">
           <el-input
             v-model="registerForm.phone"
+            name="phone"
             placeholder="请输入手机号"
             size="large"
             clearable
@@ -54,6 +55,7 @@
           <div class="verify-code-wrapper">
             <el-input
               v-model="registerForm.verifyCode"
+              name="verifyCode"
               placeholder="请输入验证码"
               size="large"
               clearable
@@ -80,6 +82,7 @@
         <el-form-item prop="password">
           <el-input
             v-model="registerForm.password"
+            name="password"
             :type="showPassword ? 'text' : 'password'"
             placeholder="请输入密码（至少6位）"
             size="large"
@@ -118,6 +121,7 @@
         <el-form-item prop="confirmPassword">
           <el-input
             v-model="registerForm.confirmPassword"
+            name="confirmPassword"
             :type="showConfirmPassword ? 'text' : 'password'"
             placeholder="请再次输入密码"
             size="large"
@@ -158,7 +162,7 @@
         <div class="login-link">
           已有账号？
           <router-link
-            to="/login"
+            :to="redirectUrl ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login'"
             class="link"
           >
             立即登录
@@ -170,17 +174,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { Phone, Message, Lock, View, Hide } from '@element-plus/icons-vue';
 import { useAuth } from '@/composables/useAuth';
 import { validatePhone, validatePassword, validateVerifyCode } from '@/utils/validate';
+
+// ========== 路由 ==========
+const route = useRoute();
+const router = useRouter();
 
 // ========== 认证逻辑 ==========
 const { loading, countdown, sendingCode, register, sendCode } = useAuth();
 
 // ========== 表单引用 ==========
 const registerFormRef = ref<FormInstance>();
+
+// ========== 重定向地址 ==========
+const redirectUrl = ref<string>('');
 
 // ========== 表单数据 ==========
 const registerForm = reactive({
@@ -311,24 +323,40 @@ async function handleRegister() {
     // 验证表单
     await registerFormRef.value.validate();
 
-    // 调用注册方法
+    // 调用注册方法（不自动跳转，由本组件处理）
     const result = await register(
       registerForm.phone,
       registerForm.verifyCode,
       registerForm.password,
-      registerForm.confirmPassword
+      registerForm.confirmPassword,
+      false
     );
 
-    // 注册成功后会自动跳转到登录页（在useAuth中处理）
+    // 注册成功后处理跳转
     if (result.success) {
-      // 成功提示已在useAuth中显示
-      console.log('注册成功');
+      console.log('注册成功，准备跳转');
+      // 如果有重定向地址，跳转到该地址；否则跳转到首页
+      if (redirectUrl.value) {
+        await router.push(redirectUrl.value);
+      } else {
+        await router.push('/');
+      }
     }
   } catch (error) {
     // 表单验证失败
     console.error('表单验证失败:', error);
   }
 }
+
+// ========== 生命周期 ==========
+onMounted(() => {
+  // 获取重定向地址
+  const redirect = route.query.redirect as string;
+  if (redirect) {
+    redirectUrl.value = decodeURIComponent(redirect);
+    console.log('注册后将跳转到:', redirectUrl.value);
+  }
+});
 </script>
 
 <style scoped>

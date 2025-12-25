@@ -74,7 +74,34 @@ const routes: RouteRecordRaw[] = [
     name: 'VIP',
     component: () => import('@/views/VIP/index.vue'),
     meta: {
-      title: 'VIP中心 - 星潮设计',
+      title: 'VIP中心 - 星潮设计'
+      // 不需要登录即可访问VIP页面，购买时再检查登录状态
+    }
+  },
+  {
+    path: '/vip/orders',
+    name: 'VIPOrders',
+    component: () => import('@/views/VIP/OrderList.vue'),
+    meta: {
+      title: '我的订单 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/vip/orders/:orderNo',
+    name: 'VIPOrderDetail',
+    component: () => import('@/views/VIP/OrderDetail.vue'),
+    meta: {
+      title: '订单详情 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/user/devices',
+    name: 'UserDevices',
+    component: () => import('@/views/User/Devices.vue'),
+    meta: {
+      title: '设备管理 - 星潮设计',
       requiresAuth: true
     }
   },
@@ -270,6 +297,24 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Admin/VIP/Statistics/index.vue'),
         meta: {
           title: 'VIP统计 - 管理后台'
+        }
+      },
+      // 退款管理
+      {
+        path: 'vip/refunds',
+        name: 'AdminVIPRefunds',
+        component: () => import('@/views/Admin/VIP/Refunds/index.vue'),
+        meta: {
+          title: '退款管理 - 管理后台'
+        }
+      },
+      // 安全日志
+      {
+        path: 'security/logs',
+        name: 'AdminSecurityLogs',
+        component: () => import('@/views/Admin/Security/Logs/index.vue'),
+        meta: {
+          title: '安全日志 - 管理后台'
         }
       },
       // 积分管理

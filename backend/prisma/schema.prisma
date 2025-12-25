@@ -135,12 +135,22 @@ model orders {
   paid_at        DateTime? @db.Timestamp(6)
   created_at     DateTime  @default(now()) @db.Timestamp(6)
   updated_at     DateTime  @default(now()) @db.Timestamp(6)
-  users          users?    @relation(fields: [user_id], references: [user_id])
+  // VIP支付系统扩展字段
+  expire_at      DateTime? @db.Timestamp(6)
+  cancelled_at   DateTime? @db.Timestamp(6)
+  cancel_reason  String?   @db.VarChar(200)
+  refund_status  Int       @default(0)
+  callback_count Int       @default(0)
+
+  users           users?            @relation(fields: [user_id], references: [user_id])
+  vip_orders      vip_orders[]
+  refund_requests refund_requests[]
 
   @@index([order_no])
   @@index([order_type])
   @@index([payment_status])
   @@index([user_id])
+  @@index([expire_at])
 }
 
 model permissions {
@@ -352,6 +362,13 @@ model users {
   created_at                                                      DateTime                  @default(now()) @db.Timestamp(6)
   updated_at                                                      DateTime                  @default(now()) @db.Timestamp(6)
   last_login_at                                                   DateTime?                 @db.Timestamp(6)
+  // VIP支付系统扩展字段
+  is_lifetime_vip                                                 Boolean                   @default(false)
+  vip_activated_at                                                DateTime?                 @db.Timestamp(6)
+  payment_locked                                                  Boolean                   @default(false)
+  payment_locked_at                                               DateTime?                 @db.Timestamp(6)
+  payment_lock_reason                                             String?                   @db.VarChar(200)
+
   admin_operation_logs_admin_operation_logs_operator_idTousers    admin_operation_logs[]    @relation("admin_operation_logs_operator_idTousers")
   admin_operation_logs_admin_operation_logs_target_user_idTousers admin_operation_logs[]    @relation("admin_operation_logs_target_user_idTousers")
   audit_logs                                                      audit_logs[]
@@ -364,26 +381,38 @@ model users {
   user_favorites                                                  user_favorites[]
   user_tasks                                                      user_tasks[]
   roles                                                           roles?                    @relation(fields: [role_id], references: [role_id])
+  // VIP支付系统关联
+  device_sessions                                                 device_sessions[]
+  security_logs                                                   security_logs[]
+  refund_requests_user                                            refund_requests[]         @relation("refund_requests_user_idTousers")
+  refund_requests_reviewer                                        refund_requests[]         @relation("refund_requests_reviewer_idTousers")
+  user_download_stats                                             user_download_stats[]
+  notifications                                                   notifications[]
+  points_vip_exchanges                                            points_vip_exchanges[]
 
   @@index([phone])
   @@index([role_id])
   @@index([status])
   @@index([user_level])
   @@index([vip_level])
+  @@index([is_lifetime_vip])
 }
 
 model vip_packages {
-  package_id     String   @id @default(uuid()) @db.VarChar(36)
-  package_name   String   @db.VarChar(50)
-  package_code   String   @unique @db.VarChar(50)
-  duration_days  Int
-  original_price Decimal  @db.Decimal(10, 2)
-  current_price  Decimal  @db.Decimal(10, 2)
-  description    String?
-  sort_order     Int      @default(0)
-  status         Int      @default(1)
-  created_at     DateTime @default(now()) @db.Timestamp(6)
-  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  package_id           String                 @id @default(uuid()) @db.VarChar(36)
+  package_name         String                 @db.VarChar(50)
+  package_code         String                 @unique @db.VarChar(50)
+  duration_days        Int
+  original_price       Decimal                @db.Decimal(10, 2)
+  current_price        Decimal                @db.Decimal(10, 2)
+  description          String?
+  sort_order           Int                    @default(0)
+  status               Int                    @default(1)
+  created_at           DateTime               @default(now()) @db.Timestamp(6)
+  updated_at           DateTime               @default(now()) @db.Timestamp(6)
+  // VIP支付系统关联
+  vip_orders           vip_orders[]
+  points_vip_exchanges points_vip_exchanges[]
 
   @@index([sort_order])
   @@index([status])
@@ -402,4 +431,169 @@ model vip_privileges {
   updated_at      DateTime @default(now()) @db.Timestamp(6)
 
   @@index([is_enabled])
+}
+
+// ==================== VIP支付系统新增表 ====================
+
+// VIP订单扩展表
+model vip_orders {
+  vip_order_id            String   @id @default(uuid()) @db.VarChar(36)
+  order_id                String   @db.VarChar(36)
+  package_id              String   @db.VarChar(36)
+  source_url              String?  @db.VarChar(500)
+  source_resource_id      String?  @db.VarChar(36)
+  device_fingerprint      String?  @db.VarChar(100)
+  device_info             Json?
+  ip_address              String?  @db.VarChar(50)
+  require_secondary_auth  Boolean  @default(false)
+  secondary_auth_verified Boolean  @default(false)
+  created_at              DateTime @default(now()) @db.Timestamp(6)
+  updated_at              DateTime @default(now()) @db.Timestamp(6)
+
+  orders       orders       @relation(fields: [order_id], references: [order_id])
+  vip_packages vip_packages @relation(fields: [package_id], references: [package_id])
+
+  @@index([order_id])
+  @@index([package_id])
+}
+
+// 支付回调记录表
+model payment_callbacks {
+  callback_id     String   @id @default(uuid()) @db.VarChar(36)
+  order_no        String   @db.VarChar(50)
+  channel         String   @db.VarChar(20)
+  transaction_id  String?  @db.VarChar(100)
+  callback_data   Json
+  signature       String?  @db.VarChar(500)
+  signature_valid Boolean?
+  processed       Boolean  @default(false)
+  process_result  String?  @db.VarChar(50)
+  error_message   String?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([order_no])
+  @@index([processed])
+  @@index([created_at(sort: Desc)])
+}
+
+// 设备会话表
+model device_sessions {
+  session_id         String    @id @default(uuid()) @db.VarChar(36)
+  user_id            String    @db.VarChar(36)
+  device_fingerprint String    @db.VarChar(100)
+  device_type        String?   @db.VarChar(20)
+  browser            String?   @db.VarChar(50)
+  os                 String?   @db.VarChar(50)
+  ip_address         String?   @db.VarChar(50)
+  user_agent         String?
+  is_active          Boolean   @default(true)
+  last_active_at     DateTime  @default(now()) @db.Timestamp(6)
+  kicked_at          DateTime? @db.Timestamp(6)
+  kicked_reason      String?   @db.VarChar(100)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@index([device_fingerprint])
+  @@index([is_active])
+}
+
+// 安全日志表
+model security_logs {
+  log_id             String   @id @default(uuid()) @db.VarChar(36)
+  user_id            String?  @db.VarChar(36)
+  event_type         String   @db.VarChar(50)
+  event_data         Json?
+  ip_address         String?  @db.VarChar(50)
+  device_fingerprint String?  @db.VarChar(100)
+  risk_level         String?  @db.VarChar(20)
+  action_taken       String?  @db.VarChar(50)
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+
+  users users? @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@index([event_type])
+  @@index([created_at(sort: Desc)])
+}
+
+// 退款申请表
+model refund_requests {
+  refund_id             String    @id @default(uuid()) @db.VarChar(36)
+  order_id              String    @db.VarChar(36)
+  user_id               String    @db.VarChar(36)
+  refund_amount         Decimal   @db.Decimal(10, 2)
+  reason                String?   @db.VarChar(200)
+  reason_type           String?   @db.VarChar(50)
+  status                Int       @default(0)
+  reviewer_id           String?   @db.VarChar(36)
+  review_note           String?
+  reviewed_at           DateTime? @db.Timestamp(6)
+  refund_transaction_id String?   @db.VarChar(100)
+  refunded_at           DateTime? @db.Timestamp(6)
+  created_at            DateTime  @default(now()) @db.Timestamp(6)
+  updated_at            DateTime  @default(now()) @db.Timestamp(6)
+
+  orders                              orders @relation(fields: [order_id], references: [order_id])
+  users_refund_requests_user_id       users  @relation("refund_requests_user_idTousers", fields: [user_id], references: [user_id])
+  users_refund_requests_reviewer_id   users? @relation("refund_requests_reviewer_idTousers", fields: [reviewer_id], references: [user_id])
+
+  @@index([order_id])
+  @@index([user_id])
+  @@index([status])
+}
+
+// 用户下载统计表
+model user_download_stats {
+  stat_id             String   @id @default(uuid()) @db.VarChar(36)
+  user_id             String   @db.VarChar(36)
+  stat_date           DateTime @db.Date
+  vip_download_count  Int      @default(0)
+  free_download_count Int      @default(0)
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+  updated_at          DateTime @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [user_id])
+
+  @@unique([user_id, stat_date])
+  @@index([user_id, stat_date])
+}
+
+// 站内信表
+model notifications {
+  notification_id String    @id @default(uuid()) @db.VarChar(36)
+  user_id         String    @db.VarChar(36)
+  title           String    @db.VarChar(200)
+  content         String
+  type            String    @db.VarChar(50)
+  link_url        String?   @db.VarChar(500)
+  is_read         Boolean   @default(false)
+  read_at         DateTime? @db.Timestamp(6)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+
+  users users @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@index([is_read])
+  @@index([created_at(sort: Desc)])
+}
+
+// 积分兑换VIP记录表
+model points_vip_exchanges {
+  exchange_id      String   @id @default(uuid()) @db.VarChar(36)
+  user_id          String   @db.VarChar(36)
+  package_id       String   @db.VarChar(36)
+  points_cost      Int
+  exchange_month   DateTime @db.Date
+  vip_days_granted Int
+  status           Int      @default(1)
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+
+  users        users        @relation(fields: [user_id], references: [user_id])
+  vip_packages vip_packages @relation(fields: [package_id], references: [package_id])
+
+  @@unique([user_id, exchange_month])
+  @@index([user_id])
+  @@index([exchange_month])
 }

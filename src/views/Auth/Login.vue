@@ -39,6 +39,7 @@
         <el-form-item prop="phone">
           <el-input
             v-model="loginForm.phone"
+            name="phone"
             placeholder="请输入手机号"
             size="large"
             clearable
@@ -54,11 +55,13 @@
         <el-form-item prop="password">
           <el-input
             v-model="loginForm.password"
+            name="password"
             :type="showPassword ? 'text' : 'password'"
-            placeholder="请输入密码"
+            :placeholder="passwordPlaceholder"
             size="large"
             clearable
             maxlength="20"
+            @focus="passwordPlaceholder = '请输入密码'"
             @keyup.enter="handleLogin"
           >
             <template #prefix>
@@ -110,7 +113,7 @@
         <div class="register-link">
           还没有账号？
           <router-link
-            to="/register"
+            :to="redirectUrl ? `/register?redirect=${encodeURIComponent(redirectUrl)}` : '/register'"
             class="link"
           >
             立即注册
@@ -145,17 +148,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { Phone, Lock, View, Hide, ChatDotRound, User } from '@element-plus/icons-vue';
 import { useAuth } from '@/composables/useAuth';
 import { validatePhone } from '@/utils/validate';
+
+// ========== 路由 ==========
+const route = useRoute();
+const router = useRouter();
 
 // ========== 认证逻辑 ==========
 const { loading, login } = useAuth();
 
 // ========== 表单引用 ==========
 const loginFormRef = ref<FormInstance>();
+
+// ========== 重定向地址 ==========
+const redirectUrl = ref<string>('');
 
 // ========== 表单数据 ==========
 const loginForm = reactive({
@@ -166,6 +177,9 @@ const loginForm = reactive({
 
 // ========== 密码显示/隐藏 ==========
 const showPassword = ref(false);
+
+// ========== 密码输入框placeholder ==========
+const passwordPlaceholder = ref('请输入密码');
 
 // ========== 表单验证规则 ==========
 const loginRules: FormRules = {
@@ -202,19 +216,62 @@ async function handleLogin() {
     // 验证表单
     await loginFormRef.value.validate();
 
-    // 调用登录方法
-    const result = await login(loginForm.phone, loginForm.password, loginForm.rememberMe);
+    // 调用登录方法（不自动跳转，由本组件处理）
+    const result = await login(loginForm.phone, loginForm.password, loginForm.rememberMe, false);
 
-    // 登录成功后会自动跳转到首页（在useAuth中处理）
+    // 登录成功后处理跳转
     if (result.success) {
-      // 成功提示已在useAuth中显示
-      console.log('登录成功');
+      console.log('登录成功，准备跳转');
+      // 如果有重定向地址，跳转到该地址；否则跳转到首页
+      if (redirectUrl.value) {
+        await router.push(redirectUrl.value);
+      } else {
+        await router.push('/');
+      }
+    } else {
+      // 根据错误码处理不同情况
+      handleLoginError(result.errorCode);
     }
   } catch (error) {
     // 表单验证失败
     console.error('表单验证失败:', error);
   }
 }
+
+/**
+ * 处理登录错误
+ * @param errorCode 错误码
+ */
+function handleLoginError(errorCode?: string) {
+  if (errorCode === 'ACCOUNT_NOT_FOUND') {
+    // 账号不存在：清空账号和密码输入框
+    loginForm.phone = '';
+    loginForm.password = '';
+    // 重置表单验证状态
+    loginFormRef.value?.clearValidate();
+  } else if (errorCode === 'PASSWORD_INCORRECT') {
+    // 密码错误：保留账号，清空密码，设置密码框placeholder提示
+    loginForm.password = '';
+    passwordPlaceholder.value = '密码错误，请重新输入';
+    // 只清除密码字段的验证状态
+    loginFormRef.value?.clearValidate('password');
+  } else {
+    // 其他错误：清空所有输入
+    loginForm.phone = '';
+    loginForm.password = '';
+    loginFormRef.value?.clearValidate();
+  }
+}
+
+// ========== 生命周期 ==========
+onMounted(() => {
+  // 获取重定向地址
+  const redirect = route.query.redirect as string;
+  if (redirect) {
+    redirectUrl.value = decodeURIComponent(redirect);
+    console.log('登录后将跳转到:', redirectUrl.value);
+  }
+});
 </script>
 
 <style scoped>

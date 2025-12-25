@@ -53,13 +53,15 @@ export function useAuth() {
    * @param phone 手机号
    * @param password 密码
    * @param rememberMe 是否记住我
-   * @returns Promise<{ success: boolean, error?: string }>
+   * @param autoRedirect 是否自动跳转到首页（默认true）
+   * @returns Promise<{ success: boolean, error?: string, errorCode?: string }>
    */
   async function login(
     phone: string,
     password: string,
-    rememberMe: boolean = false
-  ): Promise<{ success: boolean; error?: string }> {
+    rememberMe: boolean = false,
+    autoRedirect: boolean = true
+  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     // 重置错误状态
     error.value = null;
 
@@ -109,19 +111,26 @@ export function useAuth() {
         // 显示成功提示
         ElMessage.success('登录成功');
 
-        // 跳转到首页
-        await router.push('/');
+        // 根据参数决定是否自动跳转
+        if (autoRedirect) {
+          await router.push('/');
+        }
 
         return { success: true };
       } else {
         error.value = response.msg || '登录失败';
+        const errorCode = (response as { errorCode?: string }).errorCode;
         ElMessage.error(error.value);
-        return { success: false, error: error.value };
+        return { success: false, error: error.value, errorCode };
       }
     } catch (e) {
-      error.value = (e as Error).message || '登录失败，请稍后重试';
+      // 从axios错误响应中提取errorCode
+      const axiosError = e as { response?: { data?: { msg?: string; errorCode?: string } } };
+      const errorMsg = axiosError.response?.data?.msg || (e as Error).message || '登录失败，请稍后重试';
+      const errorCode = axiosError.response?.data?.errorCode;
+      error.value = errorMsg;
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      return { success: false, error: error.value, errorCode };
     } finally {
       loading.value = false;
     }
@@ -133,13 +142,15 @@ export function useAuth() {
    * @param verifyCode 验证码
    * @param password 密码
    * @param confirmPassword 确认密码
+   * @param autoRedirect 是否自动跳转到首页（默认true）
    * @returns Promise<{ success: boolean, error?: string }>
    */
   async function register(
     phone: string,
     verifyCode: string,
     password: string,
-    confirmPassword: string
+    confirmPassword: string,
+    autoRedirect: boolean = true
   ): Promise<{ success: boolean; error?: string }> {
     // 重置错误状态
     error.value = null;
@@ -205,8 +216,10 @@ export function useAuth() {
         // 显示成功提示
         ElMessage.success('注册成功');
 
-        // 直接跳转到首页
-        await router.push('/');
+        // 根据参数决定是否自动跳转
+        if (autoRedirect) {
+          await router.push('/');
+        }
 
         return { success: true };
       } else {

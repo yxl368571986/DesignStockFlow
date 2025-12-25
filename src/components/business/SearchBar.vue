@@ -333,6 +333,7 @@ onBeforeUnmount(() => {
       <el-input
         ref="inputRef"
         v-model="keyword"
+        name="search"
         :placeholder="placeholder"
         :loading="searching"
         clearable

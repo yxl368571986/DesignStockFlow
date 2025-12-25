@@ -1,5 +1,15 @@
 {
   "mcpServers": {
+    "semgrep": {
+      "command": "semgrep",
+      "args": [
+        "mcp"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "semgrep_scan"
+      ]
+    },
     "context7": {
       "command": "npx",
       "args": [
@@ -18,7 +28,7 @@
         "-y",
         "@playwright/mcp@latest"
       ],
-      "disabled": true,
+      "disabled": false,
       "autoApprove": [
         "browser_click",
         "browser_snapshot",

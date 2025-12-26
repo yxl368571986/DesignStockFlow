@@ -425,14 +425,18 @@ onBeforeUnmount(() => {
               快捷入口
             </h3>
             <ul class="quick-links">
+              <!-- 上传作品 - 仅登录后显示 -->
               <li
+                v-if="isLoggedIn"
                 class="quick-link-item"
                 @click="goToUpload"
               >
                 <el-icon><Upload /></el-icon>
                 <span>上传作品</span>
               </li>
+              <!-- 个人中心 - 仅登录后显示 -->
               <li
+                v-if="isLoggedIn"
                 class="quick-link-item"
                 @click="goToPersonal"
               >
@@ -862,30 +866,18 @@ onBeforeUnmount(() => {
   top: 104px;
   transition: all 0.3s ease;
   flex-shrink: 0;
-  /* 自定义滚动条样式 */
-  scrollbar-width: thin;
-  scrollbar-color: #dcdfe6 transparent;
+  /* 隐藏滚动条但保持滚动功能 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
   /* 平滑滚动 */
   scroll-behavior: smooth;
 }
 
-/* Webkit浏览器滚动条样式 */
+/* Webkit浏览器隐藏滚动条 */
 .sidebar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background-color: #dcdfe6;
-  border-radius: 3px;
-  transition: background-color 0.3s ease;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background-color: #c0c4cc;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .sidebar-collapsed {
@@ -1173,16 +1165,16 @@ onBeforeUnmount(() => {
   .sidebar {
     background: #2b2b2b;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    scrollbar-color: #4a4a4a transparent; /* 暗色模式滚动条 */
+    /* 暗色模式也隐藏滚动条 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
-  /* 暗色模式Webkit滚动条 */
-  .sidebar::-webkit-scrollbar-thumb {
-    background-color: #4a4a4a;
-  }
-
-  .sidebar::-webkit-scrollbar-thumb:hover {
-    background-color: #5a5a5a;
+  /* 暗色模式Webkit隐藏滚动条 */
+  .sidebar::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   .sidebar-title {

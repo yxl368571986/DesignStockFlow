@@ -471,7 +471,6 @@ onBeforeUnmount(() => {
               <span>上传作品</span>
             </li>
             <li
-              v-if="isLoggedIn"
               class="menu-item"
               @click="goToVIP"
             >

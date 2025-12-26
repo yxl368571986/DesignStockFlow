@@ -30,7 +30,7 @@ export const vipUserRoutes: RouteRecordRaw[] = [
     component: VipCenter,
     meta: {
       title: 'VIP会员中心',
-      requiresAuth: true,
+      // 不需要登录即可访问VIP页面，购买时再检查登录状态
     },
   },
   {

@@ -2,11 +2,15 @@
 /**
  * VIP会员中心页面
  * 展示VIP套餐、支付流程、用户VIP状态
+ * 
+ * 非登录用户：只能查看套餐展示（不可点击），不显示支付方式、购买按钮、服务协议
+ * 登录用户：完整功能，可选择套餐、支付方式、购买
  */
 
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { Check, Star, Download, Promotion, Service } from '@element-plus/icons-vue';
 import { useVipStore } from '@/pinia/vipStore';
 import { useUserStore } from '@/pinia/userStore';
 import VipIcon from '@/components/business/VipIcon.vue';
@@ -99,13 +103,20 @@ const needSecondaryAuth = computed(() => {
 async function initData() {
   loading.value = true;
   try {
-    await vipStore.initVipData();
+    // 获取套餐和特权列表（不需要登录）
+    await Promise.all([
+      vipStore.fetchPackages(),
+      vipStore.fetchPrivileges()
+    ]);
+    
+    // 只有登录用户才获取VIP信息和积分兑换信息
     if (isLoggedIn.value) {
+      await vipStore.fetchUserVipInfo();
       await vipStore.fetchPointsExchangeInfo();
     }
     
-    // 默认选中第一个套餐
-    if (packages.value.length > 0 && !selectedPackage.value) {
+    // 登录用户默认选中第一个套餐，非登录用户不选中
+    if (isLoggedIn.value && packages.value.length > 0 && !selectedPackage.value) {
       selectedPackage.value = packages.value[0];
     }
   } catch (error) {
@@ -116,8 +127,13 @@ async function initData() {
   }
 }
 
-/** 选择套餐 */
+/** 选择套餐 - 仅登录用户可用 */
 function selectPackage(pkg: VipPackage) {
+  if (!isLoggedIn.value) {
+    // 非登录用户点击套餐时提示登录
+    ElMessage.info('请先登录后再选择套餐');
+    return;
+  }
   selectedPackage.value = pkg;
 }
 
@@ -135,13 +151,18 @@ function getDiscount(pkg: VipPackage): string {
   return `${discount}折`;
 }
 
+/** 跳转登录 */
+function goToLogin() {
+  router.push({
+    path: '/login',
+    query: { redirect: route.fullPath }
+  });
+}
+
 /** 处理购买 */
 async function handlePurchase() {
   if (!isLoggedIn.value) {
-    router.push({
-      path: '/login',
-      query: { redirect: route.fullPath }
-    });
+    goToLogin();
     return;
   }
   
@@ -251,6 +272,13 @@ watch(() => userStore.isLoggedIn, (loggedIn) => {
   if (loggedIn) {
     vipStore.fetchUserVipInfo();
     vipStore.fetchPointsExchangeInfo();
+    // 登录后默认选中第一个套餐
+    if (packages.value.length > 0 && !selectedPackage.value) {
+      selectedPackage.value = packages.value[0];
+    }
+  } else {
+    // 登出后清除选中状态
+    selectedPackage.value = null;
   }
 });
 
@@ -266,22 +294,36 @@ onMounted(() => {
     <div class="vip-header">
       <div class="header-content">
         <h1 class="page-title">
-          <VipIcon status="active" size="large" />
+          <VipIcon
+            status="active"
+            size="large"
+          />
           VIP会员中心
         </h1>
-        <p class="page-subtitle">升级VIP，享受无限下载特权</p>
+        <p class="page-subtitle">
+          升级VIP，享受无限下载特权
+        </p>
       </div>
     </div>
     
     <div class="vip-container">
       <!-- 加载状态 -->
-      <div v-if="loading" class="loading-wrapper">
-        <el-skeleton :rows="5" animated />
+      <div
+        v-if="loading"
+        class="loading-wrapper"
+      >
+        <el-skeleton
+          :rows="5"
+          animated
+        />
       </div>
       
       <template v-else>
-        <!-- 用户VIP状态卡片 -->
-        <div v-if="isLoggedIn" class="user-vip-section">
+        <!-- 用户VIP状态卡片 - 仅登录用户显示 -->
+        <div
+          v-if="isLoggedIn"
+          class="user-vip-section"
+        >
           <VipStatusCard
             :is-vip="vipStatus === 'active' || vipStatus === 'lifetime'"
             :is-lifetime-vip="isLifetimeVip"
@@ -293,15 +335,39 @@ onMounted(() => {
           />
         </div>
         
-        <!-- 终身VIP提示 -->
-        <div v-if="isLifetimeVip" class="lifetime-notice">
+        <!-- 非登录用户提示 -->
+        <div
+          v-if="!isLoggedIn"
+          class="guest-notice"
+        >
+          <el-icon><Star /></el-icon>
+          <span>登录后即可购买VIP套餐，享受专属特权</span>
+          <el-button
+            type="primary"
+            size="small"
+            @click="goToLogin"
+          >
+            立即登录
+          </el-button>
+        </div>
+        
+        <!-- 终身VIP提示 - 仅登录用户显示 -->
+        <div
+          v-if="isLoggedIn && isLifetimeVip"
+          class="lifetime-notice"
+        >
           <el-icon><Star /></el-icon>
           <span>您已是终身VIP会员，无需再次购买</span>
         </div>
         
-        <!-- 套餐选择 -->
-        <div v-else class="packages-section">
-          <h2 class="section-title">选择套餐</h2>
+        <!-- 套餐展示 -->
+        <div
+          v-if="!isLifetimeVip || !isLoggedIn"
+          class="packages-section"
+        >
+          <h2 class="section-title">
+            {{ isLoggedIn ? '选择套餐' : 'VIP套餐' }}
+          </h2>
           
           <div class="packages-grid">
             <div
@@ -309,48 +375,73 @@ onMounted(() => {
               :key="pkg.packageId"
               class="package-card"
               :class="{ 
-                active: selectedPackage?.packageId === pkg.packageId,
-                featured: pkg.packageCode === 'yearly'
+                active: isLoggedIn && selectedPackage?.packageId === pkg.packageId,
+                featured: pkg.packageCode === 'yearly',
+                'display-only': !isLoggedIn
               }"
               @click="selectPackage(pkg)"
             >
               <!-- 标签 -->
-              <div v-if="getPackageTag(pkg)" class="package-tag">
+              <div
+                v-if="getPackageTag(pkg)"
+                class="package-tag"
+              >
                 {{ getPackageTag(pkg) }}
               </div>
               
               <!-- 套餐名称 -->
-              <h3 class="package-name">{{ pkg.packageName }}</h3>
+              <h3 class="package-name">
+                {{ pkg.packageName }}
+              </h3>
               
               <!-- 价格 -->
               <div class="package-price">
                 <span class="currency">¥</span>
                 <span class="amount">{{ pkg.currentPrice }}</span>
-                <span v-if="pkg.durationDays > 0" class="duration">
+                <span
+                  v-if="pkg.durationDays > 0"
+                  class="duration"
+                >
                   /{{ pkg.durationDays >= 365 ? '年' : pkg.durationDays >= 30 ? '月' : `${pkg.durationDays}天` }}
                 </span>
-                <span v-else class="duration">/终身</span>
+                <span
+                  v-else
+                  class="duration"
+                >
+                  /终身
+                </span>
               </div>
               
               <!-- 原价 -->
-              <div v-if="pkg.originalPrice > pkg.currentPrice" class="original-price">
+              <div
+                v-if="pkg.originalPrice > pkg.currentPrice"
+                class="original-price"
+              >
                 <span class="price-text">原价 ¥{{ pkg.originalPrice }}</span>
                 <span class="discount-tag">{{ getDiscount(pkg) }}</span>
               </div>
               
               <!-- 描述 -->
-              <p class="package-desc">{{ pkg.description }}</p>
+              <p class="package-desc">
+                {{ pkg.description }}
+              </p>
               
-              <!-- 选中标记 -->
-              <div v-if="selectedPackage?.packageId === pkg.packageId" class="check-mark">
+              <!-- 选中标记 - 仅登录用户显示 -->
+              <div
+                v-if="isLoggedIn && selectedPackage?.packageId === pkg.packageId"
+                class="check-mark"
+              >
                 <el-icon><Check /></el-icon>
               </div>
             </div>
           </div>
         </div>
         
-        <!-- 支付方式选择 -->
-        <div v-if="!isLifetimeVip && selectedPackage" class="payment-section">
+        <!-- 支付方式选择 - 仅登录用户且非终身VIP显示 -->
+        <div
+          v-if="isLoggedIn && !isLifetimeVip && selectedPackage"
+          class="payment-section"
+        >
           <PaymentMethodSelector
             v-model="selectedPaymentMethod"
             :wechat-enabled="true"
@@ -362,8 +453,11 @@ onMounted(() => {
           />
         </div>
         
-        <!-- 购买按钮 -->
-        <div v-if="!isLifetimeVip" class="purchase-section">
+        <!-- 购买按钮区域 - 仅登录用户且非终身VIP显示 -->
+        <div
+          v-if="isLoggedIn && !isLifetimeVip"
+          class="purchase-section"
+        >
           <el-button
             type="primary"
             size="large"
@@ -372,18 +466,25 @@ onMounted(() => {
             class="purchase-button"
             @click="handlePurchase"
           >
-            {{ isLoggedIn ? '立即开通' : '登录后开通' }}
+            立即开通
           </el-button>
           
           <p class="purchase-tip">
             支付即表示同意
-            <a href="/agreement" target="_blank">《VIP会员服务协议》</a>
+            <a
+              href="/agreement"
+              target="_blank"
+            >
+              《VIP会员服务协议》
+            </a>
           </p>
         </div>
         
         <!-- VIP特权展示 -->
         <div class="privileges-section">
-          <h2 class="section-title">VIP专属特权</h2>
+          <h2 class="section-title">
+            VIP专属特权
+          </h2>
           
           <div class="privileges-grid">
             <div class="privilege-card">
@@ -391,7 +492,9 @@ onMounted(() => {
                 <el-icon><Download /></el-icon>
               </div>
               <h4>无限下载</h4>
-              <p>每日可下载50次VIP资源</p>
+              <p>
+                每日可下载50次VIP资源
+              </p>
             </div>
             
             <div class="privilege-card">
@@ -399,7 +502,9 @@ onMounted(() => {
                 <el-icon><Promotion /></el-icon>
               </div>
               <h4>极速下载</h4>
-              <p>享受高速下载通道</p>
+              <p>
+                享受高速下载通道
+              </p>
             </div>
             
             <div class="privilege-card">
@@ -407,7 +512,9 @@ onMounted(() => {
                 <el-icon><Star /></el-icon>
               </div>
               <h4>专属资源</h4>
-              <p>解锁全站VIP专属素材</p>
+              <p>
+                解锁全站VIP专属素材
+              </p>
             </div>
             
             <div class="privilege-card">
@@ -415,15 +522,18 @@ onMounted(() => {
                 <el-icon><Service /></el-icon>
               </div>
               <h4>优先客服</h4>
-              <p>专属客服优先响应</p>
+              <p>
+                专属客服优先响应
+              </p>
             </div>
           </div>
         </div>
       </template>
     </div>
     
-    <!-- 支付弹窗 -->
+    <!-- 支付弹窗 - 仅登录用户可用 -->
     <PaymentDialog
+      v-if="isLoggedIn"
       v-model:visible="showPaymentDialog"
       :order-no="currentOrderInfo?.orderNo || ''"
       :payment-method="selectedPaymentMethod"
@@ -436,8 +546,9 @@ onMounted(() => {
       @timeout="handlePaymentTimeout"
     />
     
-    <!-- 二次验证弹窗 -->
+    <!-- 二次验证弹窗 - 仅登录用户可用 -->
     <SecondaryAuthDialog
+      v-if="isLoggedIn"
       v-model:visible="showAuthDialog"
       :order-no="currentOrderInfo?.orderNo || ''"
       :amount="currentOrderInfo?.amount || 0"
@@ -445,8 +556,9 @@ onMounted(() => {
       @cancel="() => showAuthDialog = false"
     />
     
-    <!-- 支付成功弹窗 -->
+    <!-- 支付成功弹窗 - 仅登录用户可用 -->
     <PaymentSuccessDialog
+      v-if="isLoggedIn"
       v-model:visible="showSuccessDialog"
       :order-no="successInfo?.orderNo || ''"
       :package-name="successInfo?.packageName || ''"
@@ -456,8 +568,9 @@ onMounted(() => {
       :source-resource-id="sourceResourceId"
     />
     
-    <!-- 积分兑换面板 -->
+    <!-- 积分兑换面板 - 仅登录用户可用 -->
     <el-dialog
+      v-if="isLoggedIn"
       v-model="showPointsExchange"
       title=""
       width="400px"
@@ -471,13 +584,6 @@ onMounted(() => {
     </el-dialog>
   </div>
 </template>
-
-<script lang="ts">
-import { Check, Star, Download, Promotion, Service } from '@element-plus/icons-vue';
-export default {
-  components: { Check, Star, Download, Promotion, Service }
-};
-</script>
 
 <style scoped>
 .vip-page {
@@ -527,6 +633,24 @@ export default {
 
 .user-vip-section {
   margin-bottom: 24px;
+}
+
+/* 非登录用户提示样式 */
+.guest-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+  border-radius: 12px;
+  font-size: 15px;
+  color: #1976D2;
+  margin-bottom: 24px;
+}
+
+.guest-notice .el-icon {
+  font-size: 20px;
 }
 
 .lifetime-notice {
@@ -588,6 +712,21 @@ export default {
 
 .package-card.featured.active {
   background: #FDF6EC;
+}
+
+/* 非登录用户套餐卡片样式 - 仅展示不可点击 */
+.package-card.display-only {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.package-card.display-only:hover {
+  border-color: #E4E7ED;
+  box-shadow: none;
+}
+
+.package-card.display-only.featured:hover {
+  border-color: #E6A23C;
 }
 
 .package-tag {
@@ -787,6 +926,12 @@ export default {
   
   .privileges-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .guest-notice {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
   }
 }
 </style>

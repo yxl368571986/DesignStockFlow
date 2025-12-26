@@ -1,0 +1,2145 @@
+openapi: 3.0.3
+info:
+  title: VIP会员支付系统 API
+  description: |
+    VIP会员支付系统的完整API文档，包括支付回调、VIP订单管理、积分兑换、二次验证等功能模块。
+    
+    ## 认证方式
+    大部分接口需要Bearer Token认证，请在请求头中添加：
+    ```
+    Authorization: Bearer {token}
+    ```
+    
+    ## 响应格式
+    所有接口返回统一的JSON格式：
+    ```json
+    {
+      "code": 0,
+      "message": "操作成功",
+      "data": { ... }
+    }
+    ```
+    
+    ## 错误码说明
+    - 0: 成功
+    - 400: 请求参数错误
+    - 401: 未登录或Token过期
+    - 403: 权限不足
+    - 404: 资源不存在
+    - 500: 服务器内部错误
+  version: 1.2.0
+  contact:
+    name: API Support
+    email: support@startide-design.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /api/v1
+    description: API基础路径
+
+tags:
+  - name: VIP套餐
+    description: VIP套餐和特权相关接口
+  - name: VIP订单
+    description: VIP订单创建、支付、查询相关接口
+  - name: 积分兑换
+    description: 积分兑换VIP相关接口
+  - name: 二次验证
+    description: 支付二次验证相关接口
+  - name: 设备管理
+    description: 用户设备管理相关接口
+  - name: 支付回调
+    description: 微信支付和支付宝支付回调接口
+  - name: 管理后台-VIP
+    description: 管理后台VIP管理相关接口
+  - name: 管理后台-安全
+    description: 管理后台安全日志相关接口
+
+paths:
+  # ==================== VIP套餐接口 ====================
+  /vip/packages:
+    get:
+      tags:
+        - VIP套餐
+      summary: 获取VIP套餐列表
+      description: 获取所有启用状态的VIP套餐列表，按排序顺序返回
+      operationId: getVipPackages
+      responses:
+        '200':
+          description: 成功获取套餐列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VipPackagesResponse'
+
+  /vip/privileges:
+    get:
+      tags:
+        - VIP套餐
+      summary: 获取VIP特权列表
+      description: 获取VIP会员的特权说明列表
+      operationId: getVipPrivileges
+      responses:
+        '200':
+          description: 成功获取特权列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VipPrivilegesResponse'
+
+  /vip/my-info:
+    get:
+      tags:
+        - VIP套餐
+      summary: 获取用户VIP信息
+      description: 获取当前登录用户的VIP状态信息
+      operationId: getUserVipInfo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功获取用户VIP信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserVipInfoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== VIP订单接口 ====================
+  /vip/orders:
+    post:
+      tags:
+        - VIP订单
+      summary: 创建VIP订单
+      description: 创建VIP会员购买订单
+      operationId: createVipOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVipOrderRequest'
+      responses:
+        '200':
+          description: 订单创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateVipOrderResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 支付受限或有过多未支付订单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - VIP订单
+      summary: 获取用户订单列表
+      description: 获取当前用户的VIP订单列表，支持分页和状态筛选
+      operationId: getUserOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: 订单状态筛选
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: 成功获取订单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOrdersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+
+  /vip/orders/{orderNo}:
+    get:
+      tags:
+        - VIP订单
+      summary: 获取订单详情
+      description: 获取指定订单的详细信息
+      operationId: getOrderDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: path
+          required: true
+          description: 订单号
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取订单详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vip/orders/{orderNo}/pay:
+    post:
+      tags:
+        - VIP订单
+      summary: 发起支付
+      description: 对已创建的订单发起支付，获取支付凭证
+      operationId: initiatePayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: path
+          required: true
+          description: 订单号
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayOrderRequest'
+      responses:
+        '200':
+          description: 支付发起成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayOrderResponse'
+        '400':
+          description: 订单状态不正确或需要二次验证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vip/orders/{orderNo}/status:
+    get:
+      tags:
+        - VIP订单
+      summary: 查询支付状态
+      description: 查询订单的支付状态，用于前端轮询
+      operationId: getPaymentStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: path
+          required: true
+          description: 订单号
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取支付状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vip/orders/{orderNo}/cancel:
+    post:
+      tags:
+        - VIP订单
+      summary: 取消订单
+      description: 取消待支付状态的订单
+      operationId: cancelOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: path
+          required: true
+          description: 订单号
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: 取消原因
+      responses:
+        '200':
+          description: 订单取消成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 订单状态不允许取消
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vip/orders/{orderNo}/refund:
+    post:
+      tags:
+        - VIP订单
+      summary: 申请退款
+      description: |
+        对已支付的订单申请退款。
+        
+        **退款条件：**
+        - 月度/季度/年度VIP：购买后7天内且未下载任何资源
+        - 终身VIP：不支持退款
+      operationId: requestRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: path
+          required: true
+          description: 订单号
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '200':
+          description: 退款申请提交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: 不符合退款条件
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+
+  # ==================== 积分兑换接口 ====================
+  /vip/points-exchange/info:
+    get:
+      tags:
+        - 积分兑换
+      summary: 获取积分兑换信息
+      description: 获取用户积分余额和兑换规则
+      operationId: getPointsExchangeInfo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功获取兑换信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsExchangeInfoResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vip/points-exchange:
+    post:
+      tags:
+        - 积分兑换
+      summary: 积分兑换VIP
+      description: |
+        使用积分兑换VIP会员。
+        
+        **兑换规则：**
+        - 1000积分 = 1个月VIP
+        - 每月限兑换1次
+        - 单次最多兑换3个月
+      operationId: exchangePointsForVip
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointsExchangeRequest'
+      responses:
+        '200':
+          description: 兑换成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsExchangeResponse'
+        '400':
+          description: 积分不足或本月已兑换
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vip/points-exchange/records:
+    get:
+      tags:
+        - 积分兑换
+      summary: 获取兑换记录
+      description: 获取用户的积分兑换VIP历史记录
+      operationId: getExchangeRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功获取兑换记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeRecordsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== 二次验证接口 ====================
+  /vip/auth/send-code:
+    post:
+      tags:
+        - 二次验证
+      summary: 发送二次验证码
+      description: |
+        发送支付二次验证短信验证码。
+        
+        **发送规则：**
+        - 60秒冷却时间
+        - 验证码有效期5分钟
+        - 金额≥200元的订单需要二次验证
+      operationId: sendSecondaryAuthCode
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 验证码发送成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 请60秒后再试或手机号未绑定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vip/auth/verify-code:
+    post:
+      tags:
+        - 二次验证
+      summary: 验证二次验证码
+      description: 验证支付二次验证码
+      operationId: verifySecondaryAuthCode
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  description: 6位验证码
+                  example: "123456"
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 验证码错误或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== 设备管理接口 ====================
+  /user/devices:
+    get:
+      tags:
+        - 设备管理
+      summary: 获取登录设备列表
+      description: 获取当前用户的登录设备列表
+      operationId: getUserDevices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功获取设备列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /user/devices/{sessionId}:
+    delete:
+      tags:
+        - 设备管理
+      summary: 踢出设备
+      description: 踢出指定的登录设备
+      operationId: kickDevice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: 设备会话ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 设备踢出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 不能踢出当前设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+
+  # ==================== 支付回调接口 ====================
+  /payment/wechat/notify:
+    post:
+      tags:
+        - 支付回调
+      summary: 微信支付异步回调
+      description: |
+        微信支付完成后，微信服务器会调用此接口通知支付结果。
+        
+        **注意：** 此接口由微信服务器调用，需要验证签名。
+      operationId: wechatPayNotify
+      parameters:
+        - name: Wechatpay-Timestamp
+          in: header
+          required: true
+          description: 时间戳
+          schema:
+            type: string
+        - name: Wechatpay-Nonce
+          in: header
+          required: true
+          description: 随机字符串
+          schema:
+            type: string
+        - name: Wechatpay-Signature
+          in: header
+          required: true
+          description: 签名
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WechatNotifyRequest'
+      responses:
+        '200':
+          description: 处理成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "SUCCESS"
+                  message:
+                    type: string
+                    example: "成功"
+        '400':
+          description: 签名验证失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "FAIL"
+                  message:
+                    type: string
+                    example: "签名验证失败"
+
+  /payment/alipay/notify:
+    post:
+      tags:
+        - 支付回调
+      summary: 支付宝异步回调
+      description: |
+        支付宝支付完成后，支付宝服务器会调用此接口通知支付结果。
+        
+        **注意：** 此接口由支付宝服务器调用，需要验证签名。
+      operationId: alipayNotify
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AlipayNotifyRequest'
+      responses:
+        '200':
+          description: 处理成功返回 "success"，失败返回 "fail"
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum:
+                  - success
+                  - fail
+
+  /payment/alipay/return:
+    get:
+      tags:
+        - 支付回调
+      summary: 支付宝同步回调
+      description: 用户在支付宝完成支付后，会被重定向到此接口
+      operationId: alipayReturn
+      parameters:
+        - name: out_trade_no
+          in: query
+          required: true
+          description: 商户订单号
+          schema:
+            type: string
+        - name: trade_no
+          in: query
+          description: 支付宝交易号
+          schema:
+            type: string
+        - name: total_amount
+          in: query
+          description: 订单金额
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 重定向到支付结果页面
+          headers:
+            Location:
+              description: 重定向URL
+              schema:
+                type: string
+                example: "/vip/payment-result?orderNo=VIP20240101120000001&returnUrl=/resource/123"
+
+
+  # ==================== 管理后台-VIP接口 ====================
+  /vip/admin/orders:
+    get:
+      tags:
+        - 管理后台-VIP
+      summary: 获取VIP订单列表（管理员）
+      description: 获取所有VIP订单列表，支持分页和筛选
+      operationId: getVipOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pageNum
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 10
+        - name: paymentStatus
+          in: query
+          description: 支付状态筛选
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: paymentMethod
+          in: query
+          description: 支付方式筛选
+          schema:
+            $ref: '#/components/schemas/PaymentMethod'
+        - name: startDate
+          in: query
+          description: 开始日期 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 成功获取订单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrdersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /vip/admin/orders/{orderId}:
+    get:
+      tags:
+        - 管理后台-VIP
+      summary: 获取VIP订单详情（管理员）
+      description: 获取指定VIP订单的详细信息
+      operationId: getVipOrderById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: 订单ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取订单详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrderDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vip/admin/orders/{orderId}/refund:
+    post:
+      tags:
+        - 管理后台-VIP
+      summary: VIP订单退款（管理员）
+      description: 管理员直接对VIP订单进行退款操作
+      operationId: refundVipOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: 订单ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  description: 退款原因
+      responses:
+        '200':
+          description: 退款成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 订单状态不允许退款
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vip/admin/statistics:
+    get:
+      tags:
+        - 管理后台-VIP
+      summary: 获取VIP统计数据（管理员）
+      description: 获取VIP订单的统计数据
+      operationId: getVipStatistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功获取统计数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VipStatisticsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/vip/refunds:
+    get:
+      tags:
+        - 管理后台-VIP
+      summary: 获取退款申请列表
+      description: 获取所有退款申请列表（管理员）
+      operationId: getRefundList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          description: 退款状态筛选
+          schema:
+            $ref: '#/components/schemas/RefundStatus'
+        - name: startDate
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 成功获取退款列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/vip/refunds/{refundId}:
+    put:
+      tags:
+        - 管理后台-VIP
+      summary: 处理退款申请
+      description: 审批或拒绝退款申请（管理员）
+      operationId: processRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: refundId
+          in: path
+          required: true
+          description: 退款申请ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessRefundRequest'
+      responses:
+        '200':
+          description: 处理成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 无效的操作或已处理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/vip/order-statistics:
+    get:
+      tags:
+        - 管理后台-VIP
+      summary: 获取VIP订单统计
+      description: 获取VIP订单的详细统计数据
+      operationId: getVipOrderStatistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 成功获取统计数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatisticsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+
+  # ==================== 管理后台-安全接口 ====================
+  /admin/security/logs:
+    get:
+      tags:
+        - 管理后台-安全
+      summary: 获取安全日志列表
+      description: 获取支付安全相关的日志记录（管理员）
+      operationId: getSecurityLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 20
+        - name: eventType
+          in: query
+          description: 事件类型筛选
+          schema:
+            $ref: '#/components/schemas/SecurityEventType'
+        - name: riskLevel
+          in: query
+          description: 风险等级筛选
+          schema:
+            $ref: '#/components/schemas/RiskLevel'
+        - name: userId
+          in: query
+          description: 用户ID筛选
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 成功获取安全日志
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityLogsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}/unlock-payment:
+    post:
+      tags:
+        - 管理后台-安全
+      summary: 解除用户支付限制
+      description: 解除被限制支付的用户（管理员）
+      operationId: unlockUserPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: 用户ID
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: 解除原因
+      responses:
+        '200':
+          description: 解除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  responses:
+    Unauthorized:
+      description: 未登录或Token过期
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: "未登录或Token过期"
+
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: "权限不足"
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: "资源不存在"
+
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: "请求参数错误"
+
+
+  schemas:
+    # ==================== 通用响应 ====================
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: "操作成功"
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "错误描述"
+
+    # ==================== 枚举类型 ====================
+    PaymentMethod:
+      type: string
+      enum:
+        - wechat_native
+        - wechat_h5
+        - alipay_pc
+        - alipay_wap
+        - points
+      description: |
+        支付方式：
+        - wechat_native: 微信扫码支付 (PC端)
+        - wechat_h5: 微信H5支付 (移动端)
+        - alipay_pc: 支付宝电脑网站支付
+        - alipay_wap: 支付宝手机网站支付
+        - points: 积分兑换
+
+    OrderStatus:
+      type: integer
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      description: |
+        订单状态：
+        - 0: 待支付
+        - 1: 已支付
+        - 2: 已退款
+        - 3: 已取消
+        - 4: 退款处理中
+
+    RefundStatus:
+      type: integer
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      description: |
+        退款状态：
+        - 0: 待审核
+        - 1: 已通过
+        - 2: 已拒绝
+        - 3: 退款中
+        - 4: 已退款
+        - 5: 退款失败
+
+    RefundReasonType:
+      type: string
+      enum:
+        - not_satisfied
+        - not_needed
+        - other
+      description: |
+        退款原因类型：
+        - not_satisfied: 资源不符合预期
+        - not_needed: 不需要了
+        - other: 其他
+
+    VipIconStatus:
+      type: string
+      enum:
+        - none
+        - active
+        - active_lifetime
+        - grace_period
+      description: |
+        VIP图标状态：
+        - none: 无图标 (非VIP)
+        - active: 金色图标 (有效VIP)
+        - active_lifetime: 金色图标+终身标签
+        - grace_period: 灰色图标 (7天宽限期)
+
+    DeviceType:
+      type: string
+      enum:
+        - pc
+        - mobile
+        - tablet
+      description: |
+        设备类型：
+        - pc: 电脑
+        - mobile: 手机
+        - tablet: 平板
+
+    SecurityEventType:
+      type: string
+      enum:
+        - payment_attempt
+        - suspicious_activity
+        - account_locked
+        - account_unlocked
+        - secondary_auth
+      description: |
+        安全事件类型：
+        - payment_attempt: 支付尝试
+        - suspicious_activity: 可疑活动
+        - account_locked: 账号锁定
+        - account_unlocked: 账号解锁
+        - secondary_auth: 二次验证
+
+    RiskLevel:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+      description: |
+        风险等级：
+        - low: 低风险
+        - medium: 中风险
+        - high: 高风险
+
+
+    # ==================== VIP套餐相关 ====================
+    VipPackage:
+      type: object
+      properties:
+        packageId:
+          type: string
+          description: 套餐ID
+        packageName:
+          type: string
+          description: 套餐名称
+          example: "月度会员"
+        originalPrice:
+          type: number
+          format: float
+          description: 原价
+          example: 129.00
+        price:
+          type: number
+          format: float
+          description: 现价
+          example: 99.00
+        durationDays:
+          type: integer
+          description: 有效天数
+          example: 30
+        description:
+          type: string
+          description: 套餐描述
+        privileges:
+          type: array
+          items:
+            type: string
+          description: 特权列表
+        isLifetime:
+          type: boolean
+          description: 是否终身会员
+        sortOrder:
+          type: integer
+          description: 排序顺序
+        status:
+          type: integer
+          description: 状态 (1:启用, 0:禁用)
+
+    VipPrivilege:
+      type: object
+      properties:
+        privilegeId:
+          type: string
+          description: 特权ID
+        privilegeName:
+          type: string
+          description: 特权名称
+        description:
+          type: string
+          description: 特权描述
+        icon:
+          type: string
+          description: 图标名称
+        sortOrder:
+          type: integer
+          description: 排序顺序
+
+    VipPackagesResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VipPackage'
+
+    VipPrivilegesResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VipPrivilege'
+
+    UserVipInfoResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            userId:
+              type: string
+              description: 用户ID
+            vipLevel:
+              type: integer
+              description: VIP等级
+            isVip:
+              type: boolean
+              description: 是否VIP
+            isLifetime:
+              type: boolean
+              description: 是否终身会员
+            expireAt:
+              type: string
+              format: date-time
+              description: 到期时间
+              nullable: true
+            daysRemaining:
+              type: integer
+              description: 剩余天数
+            iconStatus:
+              $ref: '#/components/schemas/VipIconStatus'
+            privileges:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  value:
+                    type: string
+            downloadStats:
+              type: object
+              properties:
+                todayUsed:
+                  type: integer
+                  description: 今日已用下载次数
+                todayLimit:
+                  type: integer
+                  description: 今日下载上限
+                remaining:
+                  type: integer
+                  description: 剩余下载次数
+
+
+    # ==================== VIP订单相关 ====================
+    CreateVipOrderRequest:
+      type: object
+      required:
+        - packageId
+        - paymentMethod
+      properties:
+        packageId:
+          type: string
+          description: VIP套餐ID
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        sourceUrl:
+          type: string
+          description: 来源页面URL
+        sourceResourceId:
+          type: string
+          description: 来源资源ID
+        deviceFingerprint:
+          type: string
+          description: 设备指纹
+
+    CreateVipOrderResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            orderId:
+              type: string
+              description: 订单ID
+            orderNo:
+              type: string
+              description: 订单号
+              example: "VIP20240101120000001"
+            amount:
+              type: number
+              format: float
+              description: 订单金额
+              example: 99.00
+            amountInCents:
+              type: integer
+              description: 订单金额（分）
+              example: 9900
+            expireAt:
+              type: string
+              format: date-time
+              description: 订单过期时间
+            requireSecondaryAuth:
+              type: boolean
+              description: 是否需要二次验证
+            packageName:
+              type: string
+              description: 套餐名称
+            durationDays:
+              type: integer
+              description: 有效天数
+
+    PayOrderRequest:
+      type: object
+      properties:
+        secondaryAuthCode:
+          type: string
+          description: 二次验证码（金额≥200元时必填）
+
+    PayOrderResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            paymentMethod:
+              $ref: '#/components/schemas/PaymentMethod'
+            paymentData:
+              type: string
+              description: |
+                支付数据：
+                - wechat_native: 微信支付二维码URL
+                - wechat_h5: 微信H5支付跳转URL
+                - alipay_pc: 支付宝支付表单HTML
+                - alipay_wap: 支付宝H5支付跳转URL
+            expireAt:
+              type: string
+              format: date-time
+              description: 支付过期时间
+
+    PaymentStatusResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            orderNo:
+              type: string
+              description: 订单号
+            status:
+              $ref: '#/components/schemas/OrderStatus'
+            paidAt:
+              type: string
+              format: date-time
+              description: 支付时间
+              nullable: true
+            vipExpireAt:
+              type: string
+              format: date-time
+              description: VIP到期时间（支付成功后返回）
+              nullable: true
+            returnUrl:
+              type: string
+              description: 返回URL
+              nullable: true
+
+    UserOrdersResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderListItem'
+            total:
+              type: integer
+              description: 总数
+            page:
+              type: integer
+              description: 当前页
+            pageSize:
+              type: integer
+              description: 每页数量
+
+    OrderListItem:
+      type: object
+      properties:
+        orderId:
+          type: string
+          description: 订单ID
+        orderNo:
+          type: string
+          description: 订单号
+        packageName:
+          type: string
+          description: 套餐名称
+        amount:
+          type: number
+          format: float
+          description: 订单金额
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        paymentStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderDetailResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            orderId:
+              type: string
+            orderNo:
+              type: string
+            productName:
+              type: string
+            amount:
+              type: number
+              format: float
+            paymentMethod:
+              $ref: '#/components/schemas/PaymentMethod'
+            paymentStatus:
+              $ref: '#/components/schemas/OrderStatus'
+            paidAt:
+              type: string
+              format: date-time
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            expireAt:
+              type: string
+              format: date-time
+            vipOrder:
+              type: object
+              properties:
+                packageId:
+                  type: string
+                sourceUrl:
+                  type: string
+                  nullable: true
+                sourceResourceId:
+                  type: string
+                  nullable: true
+                requireSecondaryAuth:
+                  type: boolean
+                secondaryAuthVerified:
+                  type: boolean
+            refundable:
+              type: boolean
+              description: 是否可退款
+            refundableReason:
+              type: string
+              description: 不可退款原因
+              nullable: true
+
+
+    # ==================== 退款相关 ====================
+    RefundRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          description: 退款原因
+        reasonType:
+          $ref: '#/components/schemas/RefundReasonType'
+
+    RefundResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: "退款申请已提交，请等待审核"
+        data:
+          type: object
+          properties:
+            refundId:
+              type: string
+              description: 退款申请ID
+            status:
+              $ref: '#/components/schemas/RefundStatus'
+            createdAt:
+              type: string
+              format: date-time
+
+    RefundListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/RefundListItem'
+            total:
+              type: integer
+            page:
+              type: integer
+            pageSize:
+              type: integer
+
+    RefundListItem:
+      type: object
+      properties:
+        refundId:
+          type: string
+        orderNo:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        amount:
+          type: number
+          format: float
+        productName:
+          type: string
+        reason:
+          type: string
+        reasonType:
+          $ref: '#/components/schemas/RefundReasonType'
+        status:
+          $ref: '#/components/schemas/RefundStatus'
+        adminNote:
+          type: string
+          nullable: true
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ProcessRefundRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum:
+            - approve
+            - reject
+          description: 操作类型
+        adminNote:
+          type: string
+          description: 管理员备注
+
+    # ==================== 积分兑换相关 ====================
+    PointsExchangeInfoResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            pointsBalance:
+              type: integer
+              description: 当前积分余额
+            pointsPerMonth:
+              type: integer
+              description: 每月VIP所需积分
+              example: 1000
+            maxExchangeMonths:
+              type: integer
+              description: 单次最大兑换月数
+              example: 3
+            hasExchangedThisMonth:
+              type: boolean
+              description: 本月是否已兑换
+            lastExchangeDate:
+              type: string
+              format: date
+              description: 上次兑换日期
+              nullable: true
+            maxAffordableMonths:
+              type: integer
+              description: 当前积分可兑换的最大月数
+
+    PointsExchangeRequest:
+      type: object
+      required:
+        - months
+      properties:
+        months:
+          type: integer
+          description: 兑换月数 (1-3)
+          minimum: 1
+          maximum: 3
+
+    PointsExchangeResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: "兑换成功"
+        data:
+          type: object
+          properties:
+            pointsCost:
+              type: integer
+              description: 消耗积分
+            vipDaysGranted:
+              type: integer
+              description: 获得VIP天数
+            newExpireAt:
+              type: string
+              format: date-time
+              description: 新的VIP到期时间
+
+    ExchangeRecordsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExchangeRecord'
+            total:
+              type: integer
+            page:
+              type: integer
+            pageSize:
+              type: integer
+
+    ExchangeRecord:
+      type: object
+      properties:
+        exchangeId:
+          type: string
+        pointsCost:
+          type: integer
+        vipDaysGranted:
+          type: integer
+        exchangeMonth:
+          type: string
+          description: 兑换月份
+        status:
+          type: integer
+          description: 状态 (0:失败, 1:成功)
+        packageName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+
+    # ==================== 设备管理相关 ====================
+    DeviceListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/DeviceSession'
+            maxDevices:
+              type: integer
+              description: 最大设备数
+              example: 3
+
+    DeviceSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          description: 会话ID
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        browser:
+          type: string
+          description: 浏览器
+          example: "Chrome 120"
+        os:
+          type: string
+          description: 操作系统
+          example: "Windows 10"
+        ip:
+          type: string
+          description: IP地址
+        lastActiveAt:
+          type: string
+          format: date-time
+          description: 最后活跃时间
+        createdAt:
+          type: string
+          format: date-time
+          description: 登录时间
+        isCurrent:
+          type: boolean
+          description: 是否当前设备
+
+    # ==================== 支付回调相关 ====================
+    WechatNotifyRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 回调通知ID
+        create_time:
+          type: string
+          format: date-time
+          description: 创建时间
+        resource_type:
+          type: string
+          example: "encrypt-resource"
+        event_type:
+          type: string
+          example: "TRANSACTION.SUCCESS"
+        resource:
+          type: object
+          properties:
+            algorithm:
+              type: string
+              example: "AEAD_AES_256_GCM"
+            ciphertext:
+              type: string
+              description: 加密数据
+            nonce:
+              type: string
+              description: 随机串
+            associated_data:
+              type: string
+              description: 附加数据
+
+    AlipayNotifyRequest:
+      type: object
+      properties:
+        out_trade_no:
+          type: string
+          description: 商户订单号
+        trade_no:
+          type: string
+          description: 支付宝交易号
+        trade_status:
+          type: string
+          description: 交易状态
+          enum:
+            - WAIT_BUYER_PAY
+            - TRADE_CLOSED
+            - TRADE_SUCCESS
+            - TRADE_FINISHED
+        total_amount:
+          type: string
+          description: 订单金额
+        sign:
+          type: string
+          description: 签名
+        sign_type:
+          type: string
+          description: 签名类型
+          example: "RSA2"
+
+    # ==================== 管理后台相关 ====================
+    AdminOrdersResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminOrderItem'
+            total:
+              type: integer
+            pageNum:
+              type: integer
+            pageSize:
+              type: integer
+
+    AdminOrderItem:
+      type: object
+      properties:
+        orderId:
+          type: string
+        orderNo:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        packageId:
+          type: string
+        packageName:
+          type: string
+        amount:
+          type: number
+          format: float
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        paymentStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        transactionId:
+          type: string
+          description: 第三方交易号
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminOrderDetailResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          $ref: '#/components/schemas/AdminOrderItem'
+
+    VipStatisticsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            totalVipUsers:
+              type: integer
+              description: VIP用户总数
+            activeVipUsers:
+              type: integer
+              description: 活跃VIP用户数
+            lifetimeVipUsers:
+              type: integer
+              description: 终身会员数
+            totalRevenue:
+              type: number
+              format: float
+              description: 总收入
+
+    OrderStatisticsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            totalOrders:
+              type: integer
+              description: 订单总数
+            paidOrders:
+              type: integer
+              description: 已支付订单数
+            refundedOrders:
+              type: integer
+              description: 已退款订单数
+            totalRevenue:
+              type: number
+              format: float
+              description: 总收入
+            refundAmount:
+              type: number
+              format: float
+              description: 退款金额
+            netRevenue:
+              type: number
+              format: float
+              description: 净收入
+            channelDistribution:
+              type: array
+              items:
+                type: object
+                properties:
+                  channel:
+                    $ref: '#/components/schemas/PaymentMethod'
+                  count:
+                    type: integer
+                  amount:
+                    type: number
+                    format: float
+
+    SecurityLogsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        data:
+          type: object
+          properties:
+            list:
+              type: array
+              items:
+                $ref: '#/components/schemas/SecurityLogItem'
+            total:
+              type: integer
+            page:
+              type: integer
+            pageSize:
+              type: integer
+
+    SecurityLogItem:
+      type: object
+      properties:
+        logId:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        eventType:
+          $ref: '#/components/schemas/SecurityEventType'
+        riskLevel:
+          $ref: '#/components/schemas/RiskLevel'
+        ip:
+          type: string
+        userAgent:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time

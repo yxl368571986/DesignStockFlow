@@ -34,3 +34,13 @@ dist-ssr
 
 # Allow .env.example template
 !.env.example
+
+# Certificates - 证书文件不要提交到代码仓库
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+certs/
+backend/certs/
+**/certs/

@@ -1,9 +1,10 @@
 /**
  * 上传组合式函数
  * 提供文件上传、分片上传、进度管理等功能
+ * 支持断点续传和自动选择上传方式
  */
 
-import { ref, readonly } from 'vue';
+import { ref, readonly, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import CryptoJS from 'crypto-js';
 import {
@@ -12,12 +13,43 @@ import {
   uploadChunk,
   completeFileUpload,
   uploadFile as uploadFileAPI,
-  cancelUpload
+  cancelUpload,
+  getUploadedChunks,
+  shouldUseChunkUpload,
+  getChunkSize,
+  calculateTotalChunks
 } from '@/api/upload';
 import { validateFile, validateFileNameSecurity } from '@/utils/validate';
 import { sanitizeInput, sanitizeFileName } from '@/utils/security';
-import { CHUNK_THRESHOLD, CHUNK_SIZE } from '@/utils/constants';
 import type { UploadMetadata, ResourceInfo } from '@/types/models';
+
+/**
+ * 上传状态枚举
+ */
+export enum UploadStatus {
+  IDLE = 'idle',
+  PREPARING = 'preparing',
+  UPLOADING = 'uploading',
+  PAUSED = 'paused',
+  COMPLETING = 'completing',
+  SUCCESS = 'success',
+  ERROR = 'error',
+  CANCELLED = 'cancelled'
+}
+
+/**
+ * 断点续传信息
+ */
+export interface ResumeInfo {
+  uploadId: string;
+  fileName: string;
+  fileSize: number;
+  fileHash: string;
+  totalChunks: number;
+  uploadedChunks: number[];
+  metadata: UploadMetadata;
+  createdAt: number;
+}
 
 /**
  * 上传组合式函数
@@ -54,6 +86,41 @@ export function useUpload() {
    * 剩余时间（秒）
    */
   const remainingTime = ref(0);
+
+  /**
+   * 上传状态
+   */
+  const uploadStatus = ref<UploadStatus>(UploadStatus.IDLE);
+
+  /**
+   * 断点续传信息
+   */
+  const resumeInfo = ref<ResumeInfo | null>(null);
+
+  /**
+   * 是否使用分片上传
+   */
+  const useChunkUpload = ref(false);
+
+  /**
+   * 已上传的分片索引
+   */
+  const uploadedChunks = ref<number[]>([]);
+
+  /**
+   * 总分片数
+   */
+  const totalChunks = ref(0);
+
+  /**
+   * 是否可以恢复上传
+   */
+  const canResume = computed(() => {
+    return uploadStatus.value === UploadStatus.PAUSED && resumeInfo.value !== null;
+  });
+
+  // ========== 本地存储键 ==========
+  const RESUME_STORAGE_KEY = 'upload_resume_info';
 
   // ========== 私有方法 ==========
 
@@ -109,6 +176,52 @@ export function useUpload() {
     }
   }
 
+  /**
+   * 保存断点续传信息到本地存储
+   */
+  function saveResumeInfo(info: ResumeInfo): void {
+    try {
+      localStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(info));
+      resumeInfo.value = info;
+    } catch (e) {
+      console.warn('保存断点续传信息失败:', e);
+    }
+  }
+
+  /**
+   * 从本地存储加载断点续传信息
+   */
+  function loadResumeInfo(): ResumeInfo | null {
+    try {
+      const data = localStorage.getItem(RESUME_STORAGE_KEY);
+      if (data) {
+        const info = JSON.parse(data) as ResumeInfo;
+        // 检查是否过期（24小时）
+        if (Date.now() - info.createdAt > 24 * 60 * 60 * 1000) {
+          clearResumeInfo();
+          return null;
+        }
+        resumeInfo.value = info;
+        return info;
+      }
+    } catch (e) {
+      console.warn('加载断点续传信息失败:', e);
+    }
+    return null;
+  }
+
+  /**
+   * 清除断点续传信息
+   */
+  function clearResumeInfo(): void {
+    try {
+      localStorage.removeItem(RESUME_STORAGE_KEY);
+      resumeInfo.value = null;
+    } catch (e) {
+      console.warn('清除断点续传信息失败:', e);
+    }
+  }
+
   // ========== 公共方法 ==========
 
   /**
@@ -134,6 +247,9 @@ export function useUpload() {
     uploadSpeed.value = 0;
     remainingTime.value = 0;
     currentUploadId.value = null;
+    uploadStatus.value = UploadStatus.PREPARING;
+    uploadedChunks.value = [];
+    totalChunks.value = 0;
 
     // ========== 安全验证第一层：前端文件验证 ==========
 
@@ -141,6 +257,7 @@ export function useUpload() {
     const fileNameValidation = validateFileNameSecurity(file.name);
     if (!fileNameValidation.valid) {
       error.value = fileNameValidation.message || '文件名验证失败';
+      uploadStatus.value = UploadStatus.ERROR;
       ElMessage.error(error.value);
       return { success: false, error: error.value };
     }
@@ -149,6 +266,7 @@ export function useUpload() {
     const validation = validateFile(file);
     if (!validation.valid) {
       error.value = validation.message || '文件验证失败';
+      uploadStatus.value = UploadStatus.ERROR;
       ElMessage.error(error.value);
       return { success: false, error: error.value };
     }
@@ -178,6 +296,7 @@ export function useUpload() {
 
     // 标记为上传中
     isUploading.value = true;
+    uploadStatus.value = UploadStatus.UPLOADING;
 
     try {
       // ========== 安全验证第二层：后端文件格式验证 ==========
@@ -189,30 +308,46 @@ export function useUpload() {
 
       if (formatValidation.code !== 200 || !formatValidation.data?.isValid) {
         error.value = formatValidation.data?.msg || '后端文件格式验证失败';
+        uploadStatus.value = UploadStatus.ERROR;
         ElMessage.error(error.value);
         return { success: false, error: error.value };
       }
 
       console.log('后端验证通过:', formatValidation.data);
 
-      // 根据文件大小选择上传方式
+      // ========== 根据文件大小自动选择上传方式 ==========
       let result;
-      if (file.size > CHUNK_THRESHOLD) {
-        // 大文件：分片上传
+      
+      // 判断是否使用分片上传
+      useChunkUpload.value = shouldUseChunkUpload(file.size);
+      
+      if (useChunkUpload.value) {
+        // 大文件：使用分片上传
+        console.log(`文件较大 (${(file.size / 1024 / 1024).toFixed(2)}MB)，使用分片上传`);
+        ElMessage.info('文件较大，将使用分片上传方式');
         result = await uploadInChunks(file, sanitizedMetadata, sanitizedFileName);
       } else {
         // 小文件：直接上传
+        console.log(`文件较小 (${(file.size / 1024 / 1024).toFixed(2)}MB)，使用直接上传`);
         result = await uploadDirectly(file, sanitizedMetadata, sanitizedFileName);
+      }
+
+      if (result.success) {
+        uploadStatus.value = UploadStatus.SUCCESS;
+        clearResumeInfo();
       }
 
       return result;
     } catch (e) {
       error.value = (e as Error).message || '上传失败，请稍后重试';
+      uploadStatus.value = UploadStatus.ERROR;
       ElMessage.error(error.value);
       return { success: false, error: error.value };
     } finally {
       isUploading.value = false;
-      currentUploadId.value = null;
+      if (uploadStatus.value !== UploadStatus.SUCCESS) {
+        // 保留 currentUploadId 以支持断点续传
+      }
     }
   }
 
@@ -229,6 +364,7 @@ export function useUpload() {
     sanitizedFileName: string
   ): Promise<{ success: boolean; data?: ResourceInfo; error?: string }> {
     const startTime = Date.now();
+    const chunkSize = getChunkSize();
 
     try {
       // 计算文件哈希
@@ -236,32 +372,88 @@ export function useUpload() {
       const fileHash = await calculateFileHash(file);
 
       // 计算分片数量
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      totalChunks.value = calculateTotalChunks(file.size);
 
-      // 初始化分片上传（使用净化后的文件名）
-      const initResponse = await initChunkUpload({
-        fileName: sanitizedFileName,
-        fileSize: file.size,
-        fileHash,
-        totalChunks
-      });
+      // 检查是否有断点续传信息
+      const savedResumeInfo = loadResumeInfo();
+      let uploadId: string;
+      let alreadyUploadedChunks: number[] = [];
 
-      if (initResponse.code !== 200 || !initResponse.data?.uploadId) {
-        throw new Error(initResponse.msg || '初始化上传失败');
+      if (savedResumeInfo && savedResumeInfo.fileHash === fileHash && savedResumeInfo.fileName === sanitizedFileName) {
+        // 恢复上传
+        uploadId = savedResumeInfo.uploadId;
+        currentUploadId.value = uploadId;
+        
+        // 获取已上传的分片
+        try {
+          const chunksResponse = await getUploadedChunks(uploadId);
+          if (chunksResponse.code === 200 && chunksResponse.data?.chunks) {
+            alreadyUploadedChunks = chunksResponse.data.chunks
+              .filter(c => c.uploaded)
+              .map(c => c.chunkIndex);
+            uploadedChunks.value = alreadyUploadedChunks;
+            ElMessage.success(`恢复上传，已上传 ${alreadyUploadedChunks.length}/${totalChunks.value} 个分片`);
+          }
+        } catch (e) {
+          // 如果获取失败，重新开始上传
+          console.warn('获取已上传分片失败，重新开始上传');
+          clearResumeInfo();
+          alreadyUploadedChunks = [];
+        }
+      } else {
+        // 初始化分片上传（使用净化后的文件名）
+        const initResponse = await initChunkUpload({
+          fileName: sanitizedFileName,
+          fileSize: file.size,
+          fileHash,
+          totalChunks: totalChunks.value
+        });
+
+        if (initResponse.code !== 200 || !initResponse.data?.uploadId) {
+          throw new Error(initResponse.msg || '初始化上传失败');
+        }
+
+        uploadId = initResponse.data.uploadId;
+        currentUploadId.value = uploadId;
+
+        // 保存断点续传信息
+        saveResumeInfo({
+          uploadId,
+          fileName: sanitizedFileName,
+          fileSize: file.size,
+          fileHash,
+          totalChunks: totalChunks.value,
+          uploadedChunks: [],
+          metadata,
+          createdAt: Date.now()
+        });
       }
-
-      const uploadId = initResponse.data.uploadId;
-      currentUploadId.value = uploadId;
 
       ElMessage.success('开始上传...');
 
+      // 计算已上传的字节数
+      let uploadedBytes = alreadyUploadedChunks.length * chunkSize;
+      if (alreadyUploadedChunks.length > 0) {
+        // 更新初始进度
+        updateProgress(uploadedBytes, file.size, startTime);
+      }
+
       // 上传每个分片
-      let uploadedBytes = 0;
       const maxRetries = 3; // 每个分片最多重试3次
 
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
+      for (let i = 0; i < totalChunks.value; i++) {
+        // 跳过已上传的分片
+        if (alreadyUploadedChunks.includes(i)) {
+          continue;
+        }
+
+        // 检查是否暂停
+        if (uploadStatus.value === UploadStatus.PAUSED) {
+          return { success: false, error: '上传已暂停' };
+        }
+
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, file.size);
         const chunk = file.slice(start, end);
 
         // 创建FormData
@@ -288,7 +480,14 @@ export function useUpload() {
             if (chunkResponse.code === 200 && chunkResponse.data?.success) {
               chunkUploaded = true;
               uploadedBytes += chunk.size;
+              uploadedChunks.value.push(i);
               updateProgress(uploadedBytes, file.size, startTime);
+
+              // 更新断点续传信息
+              if (resumeInfo.value) {
+                resumeInfo.value.uploadedChunks = [...uploadedChunks.value];
+                saveResumeInfo(resumeInfo.value);
+              }
             } else {
               throw new Error(chunkResponse.msg || `分片${i + 1}上传失败`);
             }
@@ -304,6 +503,7 @@ export function useUpload() {
       }
 
       // 完成上传
+      uploadStatus.value = UploadStatus.COMPLETING;
       ElMessage.info('正在处理文件...');
       const completeResponse = await completeFileUpload({
         uploadId,
@@ -312,21 +512,14 @@ export function useUpload() {
 
       if (completeResponse.code === 200 && completeResponse.data) {
         uploadProgress.value = 100;
+        clearResumeInfo();
         ElMessage.success('上传成功！');
         return { success: true, data: completeResponse.data };
       } else {
         throw new Error(completeResponse.msg || '完成上传失败');
       }
     } catch (e) {
-      // 取消上传
-      if (currentUploadId.value) {
-        try {
-          await cancelUpload(currentUploadId.value);
-        } catch {
-          // 忽略取消失败
-        }
-      }
-
+      // 不取消上传，保留断点续传信息
       error.value = (e as Error).message || '分片上传失败';
       ElMessage.error(error.value);
       return { success: false, error: error.value };
@@ -396,6 +589,8 @@ export function useUpload() {
 
     try {
       await cancelUpload(currentUploadId.value);
+      clearResumeInfo();
+      uploadStatus.value = UploadStatus.CANCELLED;
       ElMessage.success('已取消上传');
 
       // 重置状态
@@ -404,9 +599,60 @@ export function useUpload() {
       uploadSpeed.value = 0;
       remainingTime.value = 0;
       currentUploadId.value = null;
+      uploadedChunks.value = [];
+      totalChunks.value = 0;
     } catch (e) {
       ElMessage.error('取消上传失败');
     }
+  }
+
+  /**
+   * 暂停上传
+   */
+  function pauseUpload(): void {
+    if (uploadStatus.value === UploadStatus.UPLOADING) {
+      uploadStatus.value = UploadStatus.PAUSED;
+      isUploading.value = false;
+      ElMessage.info('上传已暂停，可以稍后继续');
+    }
+  }
+
+  /**
+   * 恢复上传
+   * @param file 文件对象
+   * @returns Promise<{ success: boolean, data?: ResourceInfo, error?: string }>
+   */
+  async function resumeUpload(
+    file: File
+  ): Promise<{ success: boolean; data?: ResourceInfo; error?: string }> {
+    const savedResumeInfo = loadResumeInfo();
+    if (!savedResumeInfo) {
+      ElMessage.warning('没有可恢复的上传');
+      return { success: false, error: '没有可恢复的上传' };
+    }
+
+    // 验证文件
+    const fileHash = await calculateFileHash(file);
+    if (fileHash !== savedResumeInfo.fileHash) {
+      ElMessage.error('文件不匹配，无法恢复上传');
+      clearResumeInfo();
+      return { success: false, error: '文件不匹配' };
+    }
+
+    // 恢复上传状态
+    uploadStatus.value = UploadStatus.UPLOADING;
+    isUploading.value = true;
+
+    // 继续分片上传
+    return uploadInChunks(file, savedResumeInfo.metadata, savedResumeInfo.fileName);
+  }
+
+  /**
+   * 检查是否有可恢复的上传
+   * @returns ResumeInfo | null
+   */
+  function checkResumableUpload(): ResumeInfo | null {
+    return loadResumeInfo();
   }
 
   /**
@@ -419,6 +665,10 @@ export function useUpload() {
     currentUploadId.value = null;
     uploadSpeed.value = 0;
     remainingTime.value = 0;
+    uploadStatus.value = UploadStatus.IDLE;
+    uploadedChunks.value = [];
+    totalChunks.value = 0;
+    useChunkUpload.value = false;
   }
 
   // ========== 返回公共接口 ==========
@@ -429,12 +679,21 @@ export function useUpload() {
     error: readonly(error),
     uploadSpeed: readonly(uploadSpeed),
     remainingTime: readonly(remainingTime),
+    uploadStatus: readonly(uploadStatus),
+    canResume,
+    resumeInfo: readonly(resumeInfo),
+    useChunkUpload: readonly(useChunkUpload),
+    uploadedChunks: readonly(uploadedChunks),
+    totalChunks: readonly(totalChunks),
 
     // 方法
     handleFileUpload,
     uploadInChunks,
     uploadDirectly,
     cancelCurrentUpload,
+    pauseUpload,
+    resumeUpload,
+    checkResumableUpload,
     resetUploadState
   };
 }

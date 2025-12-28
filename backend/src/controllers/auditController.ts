@@ -1,188 +1,424 @@
 ﻿/**
  * 审核控制器
- * 处理内容审核相关的HTTP请求
+ * 处理人工审核相关的 API 请求
  */
+
 import { Request, Response } from 'express';
-import { success, error } from '@/utils/response.js';
-import { logger } from '@/utils/logger.js';
+import {
+  getAuditList,
+  approveResource,
+  rejectResource,
+  batchApprove,
+  batchReject,
+  getPresetRejectReasons,
+  getFileDetails,
+} from '../services/manualAuditService.js';
+import { getAuditLogs, getResourceAuditHistory } from '../services/auditLogService.js';
+import { sendAuditNotification } from '../services/notificationService.js';
+import { AuditErrorCodes } from '../config/audit.js';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 /**
- * 审核控制器类
+ * 获取待审核资源列表
+ * GET /api/v1/admin/audit/list
  */
-class AuditController {
-  /**
-   * 获取待审核资源列表
-   * GET /api/v1/admin/audit/resources
-   */
-  async getPendingResources(req: Request, res: Response): Promise<void> {
-    try {
-      const page = parseInt(req.query.page as string) || 1;
-      const pageSize = parseInt(req.query.pageSize as string) || 20;
-      const skip = (page - 1) * pageSize;
-
-      const [resources, total] = await Promise.all([
-        prisma.resources.findMany({
-          where: {
-            audit_status: 0,
-          },
-          include: {
-            users_resources_user_idTousers: {
-              select: {
-                user_id: true,
-                nickname: true,
-                phone: true,
-                avatar: true,
-              },
-            },
-            categories: {
-              select: {
-                category_id: true,
-                category_name: true,
-              },
-            },
-          },
-          orderBy: {
-            created_at: 'desc',
-          },
-          skip,
-          take: pageSize,
-        }),
-        prisma.resources.count({
-          where: {
-            audit_status: 0,
-          },
-        }),
-      ]);
-
-      const list = resources.map(r => ({
-        ...r,
-        // 将BigInt转换为Number以支持JSON序列化
-        file_size: r.file_size ? Number(r.file_size) : 0,
-        user: r.users_resources_user_idTousers,
-        category: r.categories,
-      }));
-
-      success(res, {
-        list,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      });
-    } catch (err: any) {
-      logger.error('获取待审核资源列表失败:', err);
-      error(res, '获取待审核资源列表失败', 500);
-    }
-  }
-
-  /**
-   * 审核资源
-   * POST /api/v1/admin/audit/resources/:resourceId
-   */
-  async auditResource(req: Request, res: Response): Promise<void> {
-    try {
-      const { resourceId } = req.params;
-      const { action, reason } = req.body;
-      const auditorId = req.user?.userId;
-
-      if (!action || !['approve', 'reject'].includes(action)) {
-        error(res, '审核操作无效，必须是 approve 或 reject', 400);
-        return;
-      }
-
-      if (action === 'reject' && !reason) {
-        error(res, '驳回时必须提供驳回原因', 400);
-        return;
-      }
-
-      const resource = await prisma.resources.findUnique({
-        where: { resource_id: resourceId },
-      });
-
-      if (!resource) {
-        error(res, '资源不存在', 404);
-        return;
-      }
-
-      if (resource.audit_status !== 0) {
-        error(res, '该资源已审核，无法重复审核', 400);
-        return;
-      }
-
-      const auditStatus = action === 'approve' ? 1 : 2;
-      const now = new Date();
-
-      await prisma.$transaction(async (tx) => {
-        // 更新资源审核状态
-        await tx.resources.update({
-          where: { resource_id: resourceId },
-          data: {
-            audit_status: auditStatus,
-            audit_msg: action === 'reject' ? reason : null,
-            auditor_id: auditorId,
-            audited_at: now,
-          },
-        });
-
-        // 记录审核日志
-        await tx.audit_logs.create({
-          data: {
-            resource_id: resourceId,
-            auditor_id: auditorId,
-            action,
-            reason: action === 'reject' ? reason : null,
-          },
-        });
-
-        // 如果审核通过，奖励上传者积分
-        if (action === 'approve' && resource.user_id) {
-          const user = await tx.users.findUnique({
-            where: { user_id: resource.user_id },
-            select: { points_balance: true, points_total: true },
-          });
-
-          if (user) {
-            const pointsReward = 50;
-            const newBalance = user.points_balance + pointsReward;
-
-            await tx.users.update({
-              where: { user_id: resource.user_id },
-              data: {
-                points_balance: newBalance,
-                points_total: user.points_total + pointsReward,
-              },
-            });
-
-            await tx.points_records.create({
-              data: {
-                user_id: resource.user_id,
-                points_change: pointsReward,
-                points_balance: newBalance,
-                change_type: 'earn',
-                source: 'upload_approved',
-                source_id: resourceId,
-                description: `作品《${resource.title}》审核通过，奖励${pointsReward}积分`,
-              },
-            });
-          }
-        }
-      });
-
-      success(
-        res,
-        null,
-        action === 'approve' ? '审核通过成功' : '审核驳回成功'
-      );
-    } catch (err: any) {
-      logger.error('审核资源失败:', err);
-      error(res, '审核资源失败', 500);
-    }
+export async function getAuditListHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const {
+      pageNum = '1',
+      pageSize = '20',
+      uploaderId,
+      fileType,
+      sortBy,
+      sortOrder,
+    } = req.query;
+    
+    const result = await getAuditList({
+      pageNum: Number(pageNum),
+      pageSize: Number(pageSize),
+      uploaderId: uploaderId as string | undefined,
+      fileType: fileType as string | undefined,
+      sortBy: sortBy as 'uploadTime' | 'fileSize' | undefined,
+      sortOrder: sortOrder as 'asc' | 'desc' | undefined,
+    });
+    
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取审核列表失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
   }
 }
 
-export const auditController = new AuditController();
+/**
+ * 审核通过
+ * POST /api/v1/admin/audit/:resourceId/approve
+ */
+export async function approveHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    const operatorId = (req as Request & { user?: { userId: string } }).user?.userId;
+    
+    if (!operatorId) {
+      res.status(401).json({ code: 401, message: '未登录' });
+      return;
+    }
+    
+    // 获取资源信息用于发送通知
+    const resource = await prisma.resources.findUnique({
+      where: { resource_id: resourceId },
+    });
+    
+    if (!resource) {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    await approveResource(resourceId, operatorId);
+    
+    // 发送通知给资源上传者
+    if (resource.user_id) {
+      await sendAuditNotification({
+        userId: resource.user_id,
+        resourceId,
+        resourceTitle: resource.title,
+        auditResult: 'approved',
+      });
+    }
+    
+    res.json({
+      code: 0,
+      message: '审核通过',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '服务器错误';
+    
+    if (errorMessage === '资源不存在') {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    if (errorMessage === '资源已审核') {
+      res.status(400).json({
+        code: AuditErrorCodes.AUDIT_002.code,
+        message: AuditErrorCodes.AUDIT_002.message,
+      });
+      return;
+    }
+    
+    console.error('审核通过失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+
+/**
+ * 审核驳回
+ * POST /api/v1/admin/audit/:resourceId/reject
+ */
+export async function rejectHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
+    const { reason_code: reasonCode, reason_detail: reasonDetail } = req.body;
+    const operatorId = (req as Request & { user?: { userId: string } }).user?.userId;
+    
+    if (!operatorId) {
+      res.status(401).json({ code: 401, message: '未登录' });
+      return;
+    }
+    
+    if (!reasonCode) {
+      res.status(400).json({
+        code: AuditErrorCodes.AUDIT_004.code,
+        message: AuditErrorCodes.AUDIT_004.message,
+      });
+      return;
+    }
+    
+    // 获取资源信息用于发送通知
+    const resource = await prisma.resources.findUnique({
+      where: { resource_id: resourceId },
+    });
+    
+    if (!resource) {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    await rejectResource({
+      resourceId,
+      operatorId,
+      reasonCode,
+      reasonDetail,
+    });
+    
+    // 发送通知给资源上传者
+    if (resource.user_id) {
+      await sendAuditNotification({
+        userId: resource.user_id,
+        resourceId,
+        resourceTitle: resource.title,
+        auditResult: 'rejected',
+        rejectReason: reasonDetail || reasonCode,
+      });
+    }
+    
+    res.json({
+      code: 0,
+      message: '已驳回',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '服务器错误';
+    
+    if (errorMessage === '资源不存在') {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    if (errorMessage === '资源已审核') {
+      res.status(400).json({
+        code: AuditErrorCodes.AUDIT_002.code,
+        message: AuditErrorCodes.AUDIT_002.message,
+      });
+      return;
+    }
+    
+    console.error('审核驳回失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 批量审核通过
+ * POST /api/v1/admin/audit/batch-approve
+ */
+export async function batchApproveHandler(req: Request, res: Response): Promise<void> {
+  try {
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
+    const { resource_ids: resourceIds } = req.body;
+    const operatorId = (req as Request & { user?: { userId: string } }).user?.userId;
+    
+    if (!operatorId) {
+      res.status(401).json({ code: 401, message: '未登录' });
+      return;
+    }
+    
+    if (!resourceIds || !Array.isArray(resourceIds) || resourceIds.length === 0) {
+      res.status(400).json({ code: 400, message: '请选择要审核的资源' });
+      return;
+    }
+    
+    const result = await batchApprove(resourceIds, operatorId);
+    
+    // 为成功审核的资源发送通知
+    for (const resourceId of resourceIds) {
+      if (!result.failedIds.includes(resourceId)) {
+        const resource = await prisma.resources.findUnique({
+          where: { resource_id: resourceId },
+        });
+        if (resource?.user_id) {
+          await sendAuditNotification({
+            userId: resource.user_id,
+            resourceId,
+            resourceTitle: resource.title,
+            auditResult: 'approved',
+          });
+        }
+      }
+    }
+    
+    res.json({
+      code: 0,
+      message: `批量审核完成，成功 ${result.successCount} 个，失败 ${result.failCount} 个`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('批量审核通过失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 批量审核驳回
+ * POST /api/v1/admin/audit/batch-reject
+ */
+export async function batchRejectHandler(req: Request, res: Response): Promise<void> {
+  try {
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
+    const { resource_ids: resourceIds, reason_code: reasonCode, reason_detail: reasonDetail } = req.body;
+    const operatorId = (req as Request & { user?: { userId: string } }).user?.userId;
+    
+    if (!operatorId) {
+      res.status(401).json({ code: 401, message: '未登录' });
+      return;
+    }
+    
+    if (!resourceIds || !Array.isArray(resourceIds) || resourceIds.length === 0) {
+      res.status(400).json({ code: 400, message: '请选择要审核的资源' });
+      return;
+    }
+    
+    if (!reasonCode) {
+      res.status(400).json({
+        code: AuditErrorCodes.AUDIT_004.code,
+        message: AuditErrorCodes.AUDIT_004.message,
+      });
+      return;
+    }
+    
+    const result = await batchReject({
+      resourceIds,
+      operatorId,
+      reasonCode,
+      reasonDetail,
+    });
+    
+    // 为成功驳回的资源发送通知
+    for (const resourceId of resourceIds) {
+      if (!result.failedIds.includes(resourceId)) {
+        const resource = await prisma.resources.findUnique({
+          where: { resource_id: resourceId },
+        });
+        if (resource?.user_id) {
+          await sendAuditNotification({
+            userId: resource.user_id,
+            resourceId,
+            resourceTitle: resource.title,
+            auditResult: 'rejected',
+            rejectReason: reasonDetail || reasonCode,
+          });
+        }
+      }
+    }
+    
+    res.json({
+      code: 0,
+      message: `批量驳回完成，成功 ${result.successCount} 个，失败 ${result.failCount} 个`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('批量审核驳回失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 获取预设驳回原因列表
+ * GET /api/v1/admin/audit/reject-reasons
+ */
+export async function getRejectReasonsHandler(_req: Request, res: Response): Promise<void> {
+  try {
+    const reasons = getPresetRejectReasons();
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: reasons,
+    });
+  } catch (error) {
+    console.error('获取驳回原因失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 获取资源详情
+ * GET /api/v1/admin/audit/:resourceId/details
+ */
+export async function getResourceDetailsHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    
+    const details = await getFileDetails(resourceId);
+    
+    if (!details) {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: details,
+    });
+  } catch (error) {
+    console.error('获取资源详情失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 获取审核日志列表
+ * GET /api/v1/admin/audit/logs
+ */
+export async function getAuditLogsHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const {
+      pageNum = '1',
+      pageSize = '20',
+      resourceId,
+      operatorId,
+      startTime,
+      endTime,
+    } = req.query;
+    
+    const result = await getAuditLogs({
+      pageNum: Number(pageNum),
+      pageSize: Number(pageSize),
+      resourceId: resourceId as string | undefined,
+      operatorId: operatorId as string | undefined,
+      startTime: startTime ? new Date(startTime as string) : undefined,
+      endTime: endTime ? new Date(endTime as string) : undefined,
+    });
+    
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取审核日志失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 获取资源审核历史
+ * GET /api/v1/admin/audit/:resourceId/history
+ */
+export async function getResourceHistoryHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    
+    const history = await getResourceAuditHistory(resourceId);
+    
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: history,
+    });
+  } catch (error) {
+    console.error('获取审核历史失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}

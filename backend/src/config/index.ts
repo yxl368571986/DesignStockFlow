@@ -74,10 +74,35 @@ export const config = {
 
   // 短信服务配置
   sms: {
+    provider: process.env.SMS_PROVIDER || 'mock',
     accessKeyId: process.env.SMS_ACCESS_KEY_ID || '',
     accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || '',
-    signName: process.env.SMS_SIGN_NAME || '',
+    signName: process.env.SMS_SIGN_NAME || '星潮设计',
     templateCode: process.env.SMS_TEMPLATE_CODE || '',
+    
+    // 阿里云短信配置
+    aliyun: {
+      accessKeyId: process.env.ALIYUN_SMS_ACCESS_KEY_ID || '',
+      accessKeySecret: process.env.ALIYUN_SMS_ACCESS_KEY_SECRET || '',
+      signName: process.env.ALIYUN_SMS_SIGN_NAME || '星潮设计',
+      templateCode: process.env.ALIYUN_SMS_TEMPLATE_CODE || '',
+    },
+    
+    // 腾讯云短信配置
+    tencent: {
+      secretId: process.env.TENCENT_SMS_SECRET_ID || '',
+      secretKey: process.env.TENCENT_SMS_SECRET_KEY || '',
+      signName: process.env.TENCENT_SMS_SIGN_NAME || '星潮设计',
+      templateId: process.env.TENCENT_SMS_TEMPLATE_ID || '',
+      appId: process.env.TENCENT_SMS_APP_ID || '',
+    },
+    
+    // Twilio短信配置
+    twilio: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+      authToken: process.env.TWILIO_AUTH_TOKEN || '',
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+    },
   },
 
   // 邮件服务配置
@@ -111,6 +136,11 @@ export const config = {
     name: process.env.SITE_NAME || '星潮设计',
     url: process.env.SITE_URL || 'http://localhost:5173',
     adminEmail: process.env.ADMIN_EMAIL || 'admin@example.com',
+  },
+
+  // 审核模式配置
+  audit: {
+    mode: (process.env.AUDIT_MODE as 'production' | 'development') || 'production',
   },
 };
 

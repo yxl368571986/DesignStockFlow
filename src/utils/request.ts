@@ -287,9 +287,10 @@ service.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data as ApiResponse;
 
-    // 如果响应码不是200，视为错误
-    if (res.code !== 200) {
-      ElMessage.error(res.msg || '请求失败');
+    // 如果响应码不是成功码（0 或 200），视为错误
+    // 后端API使用 code: 0 表示成功，部分旧接口使用 code: 200
+    if (res.code !== 0 && res.code !== 200) {
+      ElMessage.error(res.msg || res.message || '请求失败');
 
       // 特殊错误码处理
       if (res.code === 401) {
@@ -303,7 +304,7 @@ service.interceptors.response.use(
         ElMessage.error('没有权限访问');
       }
 
-      return Promise.reject(new Error(res.msg || '请求失败'));
+      return Promise.reject(new Error(res.msg || res.message || '请求失败'));
     }
 
     // 返回整个response对象，保持Axios的响应结构

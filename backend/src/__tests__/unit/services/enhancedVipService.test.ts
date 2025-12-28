@@ -3,11 +3,11 @@
  * 测试VIP服务的核心功能
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 describe('EnhancedVipService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('VIP等级定义', () => {

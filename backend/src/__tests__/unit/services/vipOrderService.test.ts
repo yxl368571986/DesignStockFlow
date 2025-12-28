@@ -3,47 +3,47 @@
  * 测试VIP订单服务的核心功能
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 // Mock Prisma
-vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn().mockImplementation(() => ({
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
     orders: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
-      update: vi.fn(),
-      count: vi.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
     },
     vip_orders: {
-      create: vi.fn(),
-      findUnique: vi.fn(),
-      update: vi.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
-    $transaction: vi.fn((callback) => callback({
+    $transaction: jest.fn((callback: Function) => callback({
       orders: {
-        create: vi.fn(),
-        update: vi.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
       },
       vip_orders: {
-        create: vi.fn(),
-        update: vi.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
       },
     })),
   })),
 }));
 
-vi.mock('../../../utils/logger', () => ({
+jest.mock('../../../utils/logger', () => ({
   default: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
   },
 }));
 
 describe('VipOrderService', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('订单号生成', () => {

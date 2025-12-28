@@ -16,6 +16,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
 import SearchBar from '@/components/business/SearchBar.vue';
+import NotificationBell from '@/components/business/NotificationBell.vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
 
@@ -259,6 +260,8 @@ onBeforeUnmount(() => {
               <span class="points-value">{{ pointsBalance }}</span>
               <span class="points-label">积分</span>
             </div>
+            <!-- 通知铃铛 -->
+            <NotificationBell />
             <!-- 上传按钮 -->
             <el-button
               type="warning"

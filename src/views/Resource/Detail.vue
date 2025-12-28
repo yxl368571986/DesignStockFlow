@@ -162,33 +162,85 @@ function getStablePlaceholderUrl(resourceId: string, index: number = 0): string 
 }
 
 /**
- * 处理图片URL，将相对路径转换为稳定的占位图
- * 确保与首页卡片使用相同的图片
+ * 获取 API 基础 URL（不含 /api/v1）
+ */
+function getApiBaseUrl(): string {
+  const apiUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  // 移除 /api/v1 后缀，获取服务器基础地址
+  return apiUrl.replace(/\/api\/v1\/?$/, '');
+}
+
+/**
+ * 判断是否为图片文件格式
+ */
+function isImageFormat(format: string | null | undefined): boolean {
+  if (!format) return false;
+  const imageFormats = ['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'BMP'];
+  return imageFormats.includes(format.toUpperCase());
+}
+
+/**
+ * 判断 URL 是否为占位图
+ */
+function isPlaceholderUrl(url: string | null | undefined): boolean {
+  if (!url) return true;
+  return url.includes('picsum.photos') || url.includes('placeholder');
+}
+
+/**
+ * 处理图片URL，将相对路径转换为完整 URL
+ * 
+ * 逻辑说明：
+ * 1. 路径是 /uploads/ → 真实上传的文件，拼接服务器地址
+ * 2. 路径是 https:// 开头 → 外部URL（如picsum），直接使用
+ * 3. 路径是 /files/ → 旧测试数据，文件不存在，使用占位图
+ * 4. 路径为空 → 使用占位图
  */
 function getImageUrl(imagePath: string | undefined | null, resourceId: string, index: number = 0): string {
+  const baseUrl = getApiBaseUrl();
+  
   // 如果路径为空、null、undefined 或空字符串，使用占位图
   if (!imagePath || imagePath.trim() === '') {
     return getStablePlaceholderUrl(resourceId, index);
   }
-  // 如果是相对路径（/covers/ 或 /previews/ 或 /uploads/），使用稳定的占位图服务
-  if (imagePath.startsWith('/covers/') || imagePath.startsWith('/previews/') || imagePath.startsWith('/uploads/')) {
+  
+  // 如果是 /uploads/ 相对路径（真实上传的文件），拼接服务器地址
+  if (imagePath.startsWith('/uploads/')) {
+    return `${baseUrl}${imagePath}`;
+  }
+  
+  // /files/ 路径是旧测试数据，文件不存在，使用占位图
+  if (imagePath.startsWith('/files/')) {
     return getStablePlaceholderUrl(resourceId, index);
   }
-  // 如果是无效的 URL 格式（不是 http/https 开头），使用占位图
-  if (!imagePath.startsWith('http://') && !imagePath.startsWith('https://')) {
-    return getStablePlaceholderUrl(resourceId, index);
+  
+  // 如果已经是完整 URL（http/https 开头），直接返回
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
   }
-  return imagePath;
+  
+  // 其他情况使用占位图
+  return getStablePlaceholderUrl(resourceId, index);
 }
 
 /**
  * 当前预览图URL
  */
 const currentImageUrl = computed(() => {
-  if (!resource.value || !resource.value.previewImages.length) {
-    // 如果没有预览图，使用封面图
-    return getImageUrl(resource.value?.cover, resource.value?.resourceId || 'default', 0);
+  if (!resource.value) {
+    return getStablePlaceholderUrl('default', 0);
   }
+  
+  // 如果没有预览图或预览图为空，使用封面图
+  if (!resource.value.previewImages || resource.value.previewImages.length === 0) {
+    return getImageUrl(
+      resource.value.cover, 
+      resource.value.resourceId, 
+      0
+    );
+  }
+  
+  // 有预览图时，使用预览图
   return getImageUrl(
     resource.value.previewImages[currentImageIndex.value],
     resource.value.resourceId,
@@ -201,6 +253,13 @@ const currentImageUrl = computed(() => {
  */
 const processedPreviewImages = computed(() => {
   if (!resource.value) return [];
+  
+  // 如果预览图为空，返回空数组
+  if (!resource.value.previewImages || resource.value.previewImages.length === 0) {
+    return [];
+  }
+  
+  // 处理每张预览图
   return resource.value.previewImages.map((img, index) => 
     getImageUrl(img, resource.value!.resourceId, index)
   );

@@ -6,6 +6,17 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { config } from '@/config/index.js';
 import { logger } from '@/utils/logger.js';
+import * as verificationCodeStore from '@/services/sms/verificationCodeStore.js';
+import * as rateLimiter from '@/services/sms/rateLimiter.js';
+import { sendVerificationCode as sendSms } from '@/services/sms/smsService.js';
+import {
+  generateVerificationCode,
+  validatePhone as validatePhoneFormat,
+  validateVerifyCode as validateCodeFormat,
+  safeCompare,
+  isCodeExpired,
+  maskPhone,
+} from '@/utils/smsUtils.js';
 import type {
   RegisterRequest,
   LoginRequest,
@@ -24,8 +35,10 @@ export class AuthService {
     const { phone, verify_code, password } = data;
 
     // 1. 验证手机号格式
-    if (!this.validatePhone(phone)) {
-      throw new Error('手机号格式不正确');
+    if (!validatePhoneFormat(phone)) {
+      const err = new Error('请输入正确的11位手机号');
+      (err as Error & { code: string }).code = 'SMS_001';
+      throw err;
     }
 
     // 2. 验证密码强度
@@ -33,10 +46,22 @@ export class AuthService {
       throw new Error('密码长度至少6位');
     }
 
-    // 3. 验证验证码（TODO: 从Redis中验证）
-    logger.info(`验证码验证: ${phone} - ${verify_code}`);
+    // 3. 验证验证码格式
+    if (!validateCodeFormat(verify_code)) {
+      const err = new Error('请输入6位数字验证码');
+      (err as Error & { code: string }).code = 'SMS_005';
+      throw err;
+    }
 
-    // 4. 检查手机号是否已存在
+    // 4. 验证验证码
+    const verifyResult = await this.verifyCode(phone, verify_code);
+    if (!verifyResult.valid) {
+      const err = new Error(verifyResult.message || '验证码错误');
+      (err as Error & { code: string }).code = verifyResult.errorCode || 'SMS_005';
+      throw err;
+    }
+
+    // 5. 检查手机号是否已存在
     const existingUser = await prisma.users.findUnique({
       where: { phone },
     });
@@ -45,10 +70,10 @@ export class AuthService {
       throw new Error('用户已存在，该手机号已注册');
     }
 
-    // 5. 加密密码
+    // 6. 加密密码
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 6. 获取默认角色（普通用户）
+    // 7. 获取默认角色（普通用户）
     const userRole = await prisma.roles.findUnique({
       where: { role_code: 'user' },
     });
@@ -57,7 +82,7 @@ export class AuthService {
       throw new Error('系统角色配置错误');
     }
 
-    // 7. 创建用户
+    // 8. 创建用户
     const user = await prisma.users.create({
       data: {
         phone,
@@ -79,14 +104,19 @@ export class AuthService {
       },
     });
 
-    logger.info(`用户注册成功: ${user.user_id} - ${phone}`);
+    logger.info(`用户注册成功: ${user.user_id} - ${maskPhone(phone)}`);
 
-    // 8. 获取用户权限列表
+    // 9. 异步删除验证码（注册成功后）
+    verificationCodeStore.remove(phone).catch((err) => {
+      logger.warn(`删除验证码失败: ${err.message}`);
+    });
+
+    // 10. 获取用户权限列表
     const permissions = user.roles?.role_permissions.map(
       (rp) => rp.permissions.permission_code
     ) || [];
 
-    // 9. 生成JWT Token（注册用户默认24小时过期）
+    // 11. 生成JWT Token（注册用户默认24小时过期）
     const token = this.generateToken({
       userId: user.user_id,
       phone: user.phone,
@@ -95,10 +125,10 @@ export class AuthService {
       permissions,
     });
 
-    // 10. 计算Token过期时间（注册用户默认24小时）
+    // 12. 计算Token过期时间（注册用户默认24小时）
     const expireTime = this.calculateExpireTime('24h');
 
-    // 11. 返回用户信息和Token
+    // 13. 返回用户信息和Token
     return {
       token,
       userInfo: this.formatUserInfo(user),
@@ -187,10 +217,29 @@ export class AuthService {
   async loginWithCode(data: { phone: string; verify_code: string }): Promise<LoginResponse> {
     const { phone, verify_code } = data;
 
-    // 验证验证码（TODO: 从Redis中验证）
-    logger.info(`验证码登录: ${phone} - ${verify_code}`);
+    // 1. 验证手机号格式
+    if (!validatePhoneFormat(phone)) {
+      const err = new Error('请输入正确的11位手机号');
+      (err as Error & { code: string }).code = 'SMS_001';
+      throw err;
+    }
 
-    // 查找用户
+    // 2. 验证验证码格式
+    if (!validateCodeFormat(verify_code)) {
+      const err = new Error('请输入6位数字验证码');
+      (err as Error & { code: string }).code = 'SMS_005';
+      throw err;
+    }
+
+    // 3. 验证验证码
+    const verifyResult = await this.verifyCode(phone, verify_code);
+    if (!verifyResult.valid) {
+      const err = new Error(verifyResult.message || '验证码错误');
+      (err as Error & { code: string }).code = verifyResult.errorCode || 'SMS_005';
+      throw err;
+    }
+
+    // 4. 查找用户
     let user = await prisma.users.findUnique({
       where: { phone },
       include: {
@@ -206,7 +255,7 @@ export class AuthService {
       },
     });
 
-    // 如果用户不存在，自动注册
+    // 5. 如果用户不存在，自动注册
     if (!user) {
       const userRole = await prisma.roles.findUnique({
         where: { role_code: 'user' },
@@ -234,23 +283,28 @@ export class AuthService {
       });
     }
 
-    // 检查用户状态
+    // 6. 检查用户状态
     if (user.status === 0) {
       throw new Error('账号已被禁用');
     }
 
-    // 更新最后登录时间
+    // 7. 更新最后登录时间
     await prisma.users.update({
       where: { user_id: user.user_id },
       data: { last_login_at: new Date() },
     });
 
-    // 获取用户权限列表
+    // 8. 异步删除验证码
+    verificationCodeStore.remove(phone).catch((err) => {
+      logger.warn(`删除验证码失败: ${err.message}`);
+    });
+
+    // 9. 获取用户权限列表
     const permissions = user.roles?.role_permissions.map(
       (rp) => rp.permissions.permission_code
     ) || [];
 
-    // 生成JWT Token
+    // 10. 生成JWT Token
     const token = this.generateToken({
       userId: user.user_id,
       phone: user.phone,
@@ -271,17 +325,119 @@ export class AuthService {
 
   /**
    * 发送验证码
+   * @param data 包含手机号和类型
+   * @param ip 请求IP地址
    */
-  async sendVerifyCode(data: { phone: string; type?: string }): Promise<void> {
-    const { phone, type = 'login' } = data;
+  async sendVerifyCode(data: { phone: string; type?: string }, ip: string = '127.0.0.1'): Promise<void> {
+    const { phone, type = 'register' } = data;
 
-    if (!this.validatePhone(phone)) {
-      throw new Error('手机号格式不正确');
+    // 1. 验证手机号格式
+    if (!validatePhoneFormat(phone)) {
+      const err = new Error('请输入正确的11位手机号');
+      (err as Error & { code: string }).code = 'SMS_001';
+      throw err;
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    logger.info(`验证码: ${phone} - ${code} - ${type}`);
-    // TODO: 实现Redis存储和短信发送
+    // 2. 检查手机号频率限制
+    const phoneLimit = await rateLimiter.checkPhoneLimit(phone);
+    if (!phoneLimit.allowed) {
+      const err = new Error(phoneLimit.message || '获取验证码过于频繁');
+      (err as Error & { code: string }).code = phoneLimit.errorCode || 'SMS_002';
+      (err as Error & { code: string; retryAfter?: number }).retryAfter = phoneLimit.retryAfter;
+      throw err;
+    }
+
+    // 3. 检查IP频率限制
+    const ipLimit = await rateLimiter.checkIpLimit(ip);
+    if (!ipLimit.allowed) {
+      const err = new Error(ipLimit.message || '操作过于频繁');
+      (err as Error & { code: string }).code = ipLimit.errorCode || 'SMS_008';
+      (err as Error & { code: string; retryAfter?: number }).retryAfter = ipLimit.retryAfter;
+      throw err;
+    }
+
+    // 4. 生成验证码
+    const code = generateVerificationCode();
+
+    // 5. 存储验证码
+    await verificationCodeStore.set(phone, code);
+
+    // 6. 记录请求（用于频率限制）
+    await rateLimiter.recordRequest(phone, ip);
+
+    // 7. 发送短信
+    const result = await sendSms(phone, code);
+    
+    if (!result.success) {
+      // 发送失败，删除已存储的验证码
+      await verificationCodeStore.remove(phone);
+      const err = new Error(result.errorMessage || '验证码发送失败，请稍后重试');
+      (err as Error & { code: string }).code = result.errorCode || 'SMS_004';
+      throw err;
+    }
+
+    logger.info(`验证码发送成功: ${maskPhone(phone)} - ${type}`);
+  }
+
+  /**
+   * 验证验证码
+   * @param phone 手机号
+   * @param code 用户输入的验证码
+   * @returns 验证结果
+   */
+  async verifyCode(phone: string, code: string): Promise<{ valid: boolean; errorCode?: string; message?: string }> {
+    try {
+      // 1. 从存储获取验证码
+      const storedData = await verificationCodeStore.get(phone);
+
+      // 2. 检查是否存在
+      if (!storedData) {
+        return {
+          valid: false,
+          errorCode: 'SMS_007',
+          message: '验证码无效或已过期',
+        };
+      }
+
+      // 3. 检查是否已使用
+      if (storedData.used) {
+        return {
+          valid: false,
+          errorCode: 'SMS_007',
+          message: '验证码已使用，请重新获取',
+        };
+      }
+
+      // 4. 检查是否过期
+      if (isCodeExpired(storedData.createTime)) {
+        return {
+          valid: false,
+          errorCode: 'SMS_006',
+          message: '验证码已过期，请重新获取',
+        };
+      }
+
+      // 5. 比对验证码（使用常量时间比较）
+      if (!safeCompare(code, storedData.code)) {
+        return {
+          valid: false,
+          errorCode: 'SMS_005',
+          message: '验证码错误，请核对后重新输入',
+        };
+      }
+
+      // 6. 标记为已使用
+      await verificationCodeStore.markAsUsed(phone);
+
+      return { valid: true };
+    } catch (error) {
+      logger.error(`验证码验证异常: ${error instanceof Error ? error.message : '未知错误'}`);
+      return {
+        valid: false,
+        errorCode: 'SMS_009',
+        message: '系统异常，请稍后重试',
+      };
+    }
   }
 
   /**
@@ -290,13 +446,34 @@ export class AuthService {
   async resetPassword(data: { phone: string; verify_code: string; new_password: string }): Promise<void> {
     const { phone, verify_code, new_password } = data;
 
-    // 验证验证码（TODO: 从Redis中验证）
-    logger.info(`重置密码验证码: ${phone} - ${verify_code}`);
+    // 1. 验证手机号格式
+    if (!validatePhoneFormat(phone)) {
+      const err = new Error('请输入正确的11位手机号');
+      (err as Error & { code: string }).code = 'SMS_001';
+      throw err;
+    }
 
+    // 2. 验证验证码格式
+    if (!validateCodeFormat(verify_code)) {
+      const err = new Error('请输入6位数字验证码');
+      (err as Error & { code: string }).code = 'SMS_005';
+      throw err;
+    }
+
+    // 3. 验证验证码
+    const verifyResult = await this.verifyCode(phone, verify_code);
+    if (!verifyResult.valid) {
+      const err = new Error(verifyResult.message || '验证码错误');
+      (err as Error & { code: string }).code = verifyResult.errorCode || 'SMS_005';
+      throw err;
+    }
+
+    // 4. 验证密码强度
     if (!this.validatePassword(new_password)) {
       throw new Error('密码长度至少6位');
     }
 
+    // 5. 查找用户
     const user = await prisma.users.findUnique({
       where: { phone },
     });
@@ -305,6 +482,7 @@ export class AuthService {
       throw new Error('用户不存在');
     }
 
+    // 6. 更新密码
     const passwordHash = await bcrypt.hash(new_password, 10);
 
     await prisma.users.update({
@@ -313,6 +491,11 @@ export class AuthService {
         password_hash: passwordHash,
         updated_at: new Date(),
       },
+    });
+
+    // 7. 异步删除验证码
+    verificationCodeStore.remove(phone).catch((err) => {
+      logger.warn(`删除验证码失败: ${err.message}`);
     });
 
     logger.info(`密码重置成功: ${user.user_id}`);

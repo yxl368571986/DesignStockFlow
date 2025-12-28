@@ -7,6 +7,17 @@ import { resourceService } from '@/services/resourceService.js';
 import { success, error, page } from '@/utils/response.js';
 import { logger } from '@/utils/logger.js';
 
+/**
+ * 上传元数据接口
+ */
+interface UploadMetadata {
+  title: string;
+  categoryId: string;
+  tags: string[];
+  description: string;
+  vipLevel: number;
+}
+
 class ResourceController {
   /**
    * 获取资源列表
@@ -80,7 +91,11 @@ class ResourceController {
       }
 
       // 验证文件是否上传
-      if (!req.file) {
+      // 使用 uploadFields 时，文件在 req.files 中
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const uploadedFile = files?.file?.[0];
+      
+      if (!uploadedFile) {
         error(res, '请上传资源文件', 400);
         return;
       }
@@ -101,7 +116,7 @@ class ResourceController {
       }
 
       // 获取预览图（如果有）
-      const previewImages = (req.files as any)?.previewImages || [];
+      const previewImages = files?.previewImages || [];
 
       // 调用服务
       const result = await resourceService.uploadResource({
@@ -111,7 +126,7 @@ class ResourceController {
         tags: parsedTags,
         vipLevel: vipLevel ? parseInt(vipLevel, 10) : 0,
         userId: req.user.userId,
-        file: req.file,
+        file: uploadedFile,
         previewImages,
       });
 
@@ -271,6 +286,64 @@ class ResourceController {
         error(res, err.message, 403);
       } else {
         error(res, err.message || '删除资源失败', 500);
+      }
+    }
+  }
+
+  /**
+   * 完成分片上传后创建资源
+   * POST /api/v1/resources/complete-upload
+   */
+  async completeChunkUpload(req: Request, res: Response): Promise<void> {
+    try {
+      // 验证用户是否登录
+      if (!req.user) {
+        error(res, '请先登录', 401);
+        return;
+      }
+
+      const { uploadId, metadata } = req.body as {
+        uploadId: string;
+        metadata: UploadMetadata;
+      };
+
+      // 验证必填字段
+      if (!uploadId) {
+        error(res, '上传ID不能为空', 400);
+        return;
+      }
+
+      if (!metadata) {
+        error(res, '资源元数据不能为空', 400);
+        return;
+      }
+
+      if (!metadata.title || !metadata.categoryId) {
+        error(res, '标题和分类不能为空', 400);
+        return;
+      }
+
+      // 调用服务创建资源
+      const result = await resourceService.createResourceFromChunkUpload({
+        uploadId,
+        userId: req.user.userId,
+        title: metadata.title,
+        description: metadata.description || '',
+        categoryId: metadata.categoryId,
+        tags: metadata.tags || [],
+        vipLevel: metadata.vipLevel || 0,
+      });
+
+      success(res, result, '资源创建成功，等待审核');
+    } catch (err: any) {
+      logger.error('完成分片上传创建资源失败:', err);
+      
+      if (err.message.includes('上传会话不存在')) {
+        error(res, err.message, 404);
+      } else if (err.message.includes('分类不存在')) {
+        error(res, err.message, 400);
+      } else {
+        error(res, err.message || '创建资源失败', 500);
       }
     }
   }

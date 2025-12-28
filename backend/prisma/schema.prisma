@@ -40,17 +40,24 @@ model announcements {
 }
 
 model audit_logs {
-  log_id      String     @id @default(uuid()) @db.VarChar(36)
-  resource_id String?    @db.VarChar(36)
-  auditor_id  String?    @db.VarChar(36)
-  action      String     @db.VarChar(20)
-  reason      String?
-  created_at  DateTime   @default(now()) @db.Timestamp(6)
-  users       users?     @relation(fields: [auditor_id], references: [user_id])
-  resources   resources? @relation(fields: [resource_id], references: [resource_id])
+  log_id             String     @id @default(uuid()) @db.VarChar(36)
+  resource_id        String?    @db.VarChar(36)
+  auditor_id         String?    @db.VarChar(36)
+  action             String     @db.VarChar(20)
+  reason             String?
+  created_at         DateTime   @default(now()) @db.Timestamp(6)
+  // 审核功能扩展字段
+  operator_type      String?    @db.VarChar(20)
+  previous_status    Int?
+  new_status         Int?
+  reject_reason_code String?    @db.VarChar(50)
+  
+  users              users?     @relation(fields: [auditor_id], references: [user_id])
+  resources          resources? @relation(fields: [resource_id], references: [resource_id])
 
   @@index([auditor_id])
   @@index([resource_id])
+  @@index([created_at(sort: Desc)])
 }
 
 model banners {
@@ -258,12 +265,19 @@ model resources {
   status                            Int                @default(1)
   created_at                        DateTime           @default(now()) @db.Timestamp(6)
   updated_at                        DateTime           @default(now()) @db.Timestamp(6)
+  // 审核功能扩展字段
+  file_hash                         String?            @db.VarChar(64)
+  extracted_files                   Json?
+  reject_reason                     String?            @db.VarChar(500)
+  reject_reason_code                String?            @db.VarChar(50)
+  
   audit_logs                        audit_logs[]
   download_history                  download_history[]
   users_resources_auditor_idTousers users?             @relation("resources_auditor_idTousers", fields: [auditor_id], references: [user_id])
   categories                        categories?        @relation(fields: [category_id], references: [category_id])
   users_resources_user_idTousers    users?             @relation("resources_user_idTousers", fields: [user_id], references: [user_id])
   user_favorites                    user_favorites[]
+  resource_notifications            notifications[]    @relation("notifications_resource_idToresources")
 
   @@index([audit_status])
   @@index([category_id])
@@ -274,6 +288,8 @@ model resources {
   @@index([status])
   @@index([user_id])
   @@index([vip_level])
+  @@index([file_hash])
+  @@index([audit_status, created_at(sort: Desc)])
 }
 
 model role_permissions {
@@ -389,6 +405,8 @@ model users {
   user_download_stats                                             user_download_stats[]
   notifications                                                   notifications[]
   points_vip_exchanges                                            points_vip_exchanges[]
+  // 分片上传关联
+  chunk_uploads                                                   chunk_uploads[]
 
   @@index([phone])
   @@index([role_id])
@@ -396,6 +414,46 @@ model users {
   @@index([user_level])
   @@index([vip_level])
   @@index([is_lifetime_vip])
+}
+
+// ==================== 分片上传相关表 ====================
+
+// 分片上传记录表
+model chunk_uploads {
+  upload_id       String        @id @default(uuid()) @db.VarChar(36)
+  user_id         String        @db.VarChar(36)
+  file_name       String        @db.VarChar(255)
+  file_size       BigInt
+  file_hash       String        @db.VarChar(64)
+  total_chunks    Int
+  uploaded_chunks Int           @default(0)
+  status          String        @default("uploading") @db.VarChar(20)
+  temp_dir        String?       @db.VarChar(500)
+  created_at      DateTime      @default(now()) @db.Timestamp(6)
+  updated_at      DateTime      @default(now()) @db.Timestamp(6)
+  expires_at      DateTime?     @db.Timestamp(6)
+
+  users           users         @relation(fields: [user_id], references: [user_id])
+  chunk_parts     chunk_parts[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([expires_at])
+}
+
+// 分片信息表
+model chunk_parts {
+  part_id       String        @id @default(uuid()) @db.VarChar(36)
+  upload_id     String        @db.VarChar(36)
+  chunk_index   Int
+  chunk_size    Int
+  uploaded      Boolean       @default(false)
+  created_at    DateTime      @default(now()) @db.Timestamp(6)
+
+  chunk_uploads chunk_uploads @relation(fields: [upload_id], references: [upload_id], onDelete: Cascade)
+
+  @@unique([upload_id, chunk_index])
+  @@index([upload_id])
 }
 
 model vip_packages {
@@ -562,21 +620,25 @@ model user_download_stats {
 
 // 站内信表
 model notifications {
-  notification_id String    @id @default(uuid()) @db.VarChar(36)
-  user_id         String    @db.VarChar(36)
-  title           String    @db.VarChar(200)
+  notification_id String     @id @default(uuid()) @db.VarChar(36)
+  user_id         String     @db.VarChar(36)
+  title           String     @db.VarChar(200)
   content         String
-  type            String    @db.VarChar(50)
-  link_url        String?   @db.VarChar(500)
-  is_read         Boolean   @default(false)
-  read_at         DateTime? @db.Timestamp(6)
-  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  type            String     @db.VarChar(50)
+  link_url        String?    @db.VarChar(500)
+  is_read         Boolean    @default(false)
+  read_at         DateTime?  @db.Timestamp(6)
+  created_at      DateTime   @default(now()) @db.Timestamp(6)
+  // 审核功能扩展字段
+  resource_id     String?    @db.VarChar(36)
 
-  users users @relation(fields: [user_id], references: [user_id])
+  users           users      @relation(fields: [user_id], references: [user_id])
+  resources       resources? @relation("notifications_resource_idToresources", fields: [resource_id], references: [resource_id])
 
   @@index([user_id])
   @@index([is_read])
   @@index([created_at(sort: Desc)])
+  @@index([resource_id])
 }
 
 // 积分兑换VIP记录表

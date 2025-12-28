@@ -109,7 +109,7 @@
             class="vip-promotion-banner"
           >
             <div class="banner-content">
-              <VipBadge :show-badge="false" />
+              <VipIcon status="active" size="large" />
               <div class="banner-text">
                 <span class="banner-title">开通VIP，无限下载</span>
                 <span class="banner-desc">VIP会员每日可下载50次，畅享海量资源</span>
@@ -136,7 +136,7 @@
             >
               <div class="resource-cover">
                 <img
-                  :src="record.resourceCover"
+                  :src="getFullImageUrl(record.resourceCover, record.resourceId)"
                   :alt="record.resourceTitle"
                 >
                 <div class="resource-format">
@@ -170,24 +170,50 @@
           v-loading="uploadLoading"
           class="tab-content"
         >
+          <!-- 审核状态筛选 -->
+          <div class="filter-bar">
+            <el-radio-group
+              v-model="uploadStatusFilter"
+              size="small"
+              @change="handleUploadFilterChange"
+            >
+              <el-radio-button value="all">
+                全部
+              </el-radio-button>
+              <el-radio-button value="pending">
+                审核中
+              </el-radio-button>
+              <el-radio-button value="approved">
+                已通过
+              </el-radio-button>
+              <el-radio-button value="rejected">
+                已驳回
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+
           <div
-            v-if="uploadList.length > 0"
+            v-if="filteredUploadList.length > 0"
             class="resource-grid"
           >
             <div
-              v-for="record in uploadList"
+              v-for="record in filteredUploadList"
               :key="record.recordId"
               class="resource-item"
+              :class="{ 'item-disabled': record.isAudit !== 1 }"
+              @click="handleUploadItemClick(record)"
             >
               <div class="resource-cover">
                 <img
-                  :src="record.resourceCover"
+                  :src="getFullImageUrl(record.resourceCover, record.resourceId) || getFormatIcon(record.resourceFormat)"
                   :alt="record.resourceTitle"
                 >
                 <div class="resource-format">
                   {{ record.resourceFormat }}
                 </div>
+                <!-- 审核状态标签：只显示审核中和已驳回 -->
                 <div
+                  v-if="record.isAudit !== 1"
                   class="audit-status"
                   :class="getAuditStatusClass(record.isAudit)"
                 >
@@ -201,19 +227,67 @@
                 <p class="upload-time">
                   {{ formatRelativeTime(record.uploadTime) }}
                 </p>
+                <!-- 驳回原因显示 -->
                 <p
-                  v-if="record.auditMsg"
-                  class="audit-msg"
+                  v-if="record.isAudit === 2 && record.auditMsg"
+                  class="audit-msg clickable"
+                  @click.stop="showRejectReason(record)"
                 >
-                  {{ record.auditMsg }}
+                  <el-icon><Warning /></el-icon>
+                  点击查看驳回原因
                 </p>
+              </div>
+              <!-- 操作按钮 -->
+              <div class="resource-actions">
+                <el-button
+                  v-if="record.isAudit === 1"
+                  size="small"
+                  type="primary"
+                  :icon="Download"
+                  @click.stop="handleDownloadResource(record)"
+                >
+                  下载
+                </el-button>
+                <el-button
+                  v-if="record.isAudit === 1"
+                  size="small"
+                  :icon="Share"
+                  @click.stop="handleShareResource(record)"
+                >
+                  分享
+                </el-button>
+                <el-tooltip
+                  v-if="record.isAudit === 0"
+                  content="审核中，暂不可操作"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    disabled
+                  >
+                    等待审核
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip
+                  v-if="record.isAudit === 2"
+                  content="已驳回，点击查看原因"
+                  placement="top"
+                >
+                  <el-button
+                    size="small"
+                    type="danger"
+                    @click.stop="showRejectReason(record)"
+                  >
+                    查看原因
+                  </el-button>
+                </el-tooltip>
               </div>
             </div>
           </div>
 
           <el-empty
             v-else
-            description="暂无上传记录"
+            :description="uploadStatusFilter === 'all' ? '暂无上传记录' : '暂无该状态的资源'"
           >
             <el-button
               type="primary"
@@ -313,15 +387,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
-import { Camera, Star, Coin, List, Plus, Download, Service, Discount } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Camera, Star, Coin, List, Plus, Download, Service, Discount, Warning, Share } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import { getDownloadHistory, getUploadHistory, getVIPInfo } from '@/api/personal';
 import { usePointsSync } from '@/composables/usePointsSync';
 import { formatTime, formatRelativeTime } from '@/utils/format';
 import { maskPhone } from '@/utils/security';
+import { getFullImageUrl } from '@/utils/url';
 import VipStatusCard from '@/components/business/VipStatusCard.vue';
-import VipBadge from '@/components/business/VipBadge.vue';
+import VipIcon from '@/components/business/VipIcon.vue';
 import type { DownloadRecord, UploadRecord, VIPInfo } from '@/types/models';
 
 const router = useRouter();
@@ -345,6 +420,21 @@ const uploadList = ref<UploadRecord[]>([]);
 const uploadTotal = ref(0);
 const uploadPage = ref(1);
 const uploadPageSize = ref(12);
+const uploadStatusFilter = ref<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+/** 根据筛选条件过滤上传列表 */
+const filteredUploadList = computed(() => {
+  if (uploadStatusFilter.value === 'all') {
+    return uploadList.value;
+  }
+  const statusMap: Record<string, number> = {
+    pending: 0,
+    approved: 1,
+    rejected: 2
+  };
+  const targetStatus = statusMap[uploadStatusFilter.value];
+  return uploadList.value.filter(item => item.isAudit === targetStatus);
+});
 
 const vipLoading = ref(false);
 const vipInfo = ref<VIPInfo>({
@@ -373,24 +463,22 @@ const vipDaysRemaining = computed(() => {
 });
 
 const editProfileVisible = ref(false);
-// TODO: 以下变量为编辑个人资料功能预留，待实现
-// @ts-expect-error - Reserved for future profile editing feature
-const updateLoading = ref(false);
-// @ts-expect-error - Reserved for future profile editing feature
-const profileForm = ref({
-  nickname: '',
-  email: ''
-});
-
 const uploadAvatarVisible = ref(false);
-// @ts-expect-error - Reserved for future avatar upload feature
-const avatarPreview = ref('');
+
+/** 错误类型定义 */
+interface ApiError {
+  response?: {
+    status?: number;
+    data?: { code?: number };
+  };
+  message?: string;
+}
 
 /**
  * 判断是否为认证错误（401/403）
  * 认证错误由请求拦截器统一处理，页面不需要显示额外提示
  */
-function isAuthError(error: any): boolean {
+function isAuthError(error: ApiError): boolean {
   const status = error.response?.status;
   const code = error.response?.data?.code;
   return status === 401 || status === 403 || code === 401 || code === 403;
@@ -408,15 +496,17 @@ async function fetchDownloadHistory() {
       pageSize: downloadPageSize.value
     });
 
-    if (res.code === 200) {
+    // 后端API使用 code: 0 表示成功
+    if (res.code === 200 || res.code === 0) {
       downloadList.value = res.data.list;
       downloadTotal.value = res.data.total;
     }
-  } catch (error: any) {
-    console.error('获取下载记录失败:', error);
+  } catch (error: unknown) {
+    const err = error as ApiError;
+    console.error('获取下载记录失败:', err);
     
     // 区分认证错误和其他错误
-    if (!isAuthError(error)) {
+    if (!isAuthError(err)) {
       // 非认证错误，显示友好提示，不退出登录
       ElMessage.warning('暂时无法加载下载记录，请稍后再试');
     }
@@ -442,15 +532,17 @@ async function fetchUploadHistory() {
       pageSize: uploadPageSize.value
     });
 
-    if (res.code === 200) {
+    // 后端API使用 code: 0 表示成功
+    if (res.code === 200 || res.code === 0) {
       uploadList.value = res.data.list;
       uploadTotal.value = res.data.total;
     }
-  } catch (error: any) {
-    console.error('获取上传记录失败:', error);
+  } catch (error: unknown) {
+    const err = error as ApiError;
+    console.error('获取上传记录失败:', err);
     
     // 区分认证错误和其他错误
-    if (!isAuthError(error)) {
+    if (!isAuthError(err)) {
       // 非认证错误，显示友好提示，不退出登录
       ElMessage.warning('暂时无法加载上传记录，请稍后再试');
     }
@@ -473,14 +565,16 @@ async function fetchVIPInfo() {
   try {
     const res = await getVIPInfo();
 
-    if (res.code === 200) {
+    // 后端API使用 code: 0 表示成功
+    if (res.code === 200 || res.code === 0) {
       vipInfo.value = res.data;
     }
-  } catch (error: any) {
-    console.error('获取VIP信息失败:', error);
+  } catch (error: unknown) {
+    const err = error as ApiError;
+    console.error('获取VIP信息失败:', err);
     
     // 区分认证错误和其他错误
-    if (!isAuthError(error)) {
+    if (!isAuthError(err)) {
       // 非认证错误，显示友好提示，不退出登录
       ElMessage.warning('暂时无法加载VIP信息，请稍后再试');
     }
@@ -521,12 +615,6 @@ function handleEditProfile() {
   editProfileVisible.value = true;
 }
 
-// TODO: 实现更新个人资料逻辑
-// @ts-expect-error - Reserved for future profile update feature
-function handleUpdateProfile() {
-  // TODO: 实现更新逻辑
-}
-
 function handleEditAvatar() {
   uploadAvatarVisible.value = true;
 }
@@ -558,7 +646,7 @@ function goToPointsRecharge() {
 
 function getAuditStatusText(status: number): string {
   const statusMap: Record<number, string> = {
-    0: '待审核',
+    0: '审核中',
     1: '已通过',
     2: '已驳回'
   };
@@ -572,6 +660,87 @@ function getAuditStatusClass(status: number): string {
     2: 'status-rejected'
   };
   return classMap[status] || '';
+}
+
+/** 获取文件格式图标 */
+function getFormatIcon(format: string): string {
+  const formatIcons: Record<string, string> = {
+    PSD: '/icons/psd.svg',
+    AI: '/icons/ai.svg',
+    CDR: '/icons/cdr.svg',
+    JPG: '/icons/jpg.svg',
+    PNG: '/icons/png.svg',
+    ZIP: '/icons/zip.svg',
+    RAR: '/icons/rar.svg'
+  };
+  return formatIcons[format?.toUpperCase()] || '/icons/file.svg';
+}
+
+/** 处理上传状态筛选变化 */
+function handleUploadFilterChange() {
+  // 筛选是前端过滤，不需要重新请求
+}
+
+/** 处理上传项点击 */
+function handleUploadItemClick(record: UploadRecord) {
+  if (record.isAudit === 1) {
+    // 已通过的资源可以查看详情
+    handleViewResource(record.resourceId);
+  } else if (record.isAudit === 2) {
+    // 已驳回的资源显示驳回原因
+    showRejectReason(record);
+  }
+  // 审核中的资源不做任何操作
+}
+
+/** 显示驳回原因 */
+function showRejectReason(record: UploadRecord) {
+  const reason = record.auditMsg || '未提供具体原因';
+  ElMessageBox.confirm(
+    `<div class="reject-reason-content">
+      <p><strong>资源名称：</strong>${record.resourceTitle}</p>
+      <p class="reject-reason"><el-icon class="warning-icon"><Warning /></el-icon><strong>驳回原因：</strong>${reason}</p>
+      <p class="tip">如有疑问，请联系客服处理。</p>
+    </div>`,
+    '审核驳回原因',
+    {
+      dangerouslyUseHTMLString: true,
+      confirmButtonText: '重新提交',
+      cancelButtonText: '我知道了',
+      type: 'warning',
+      distinguishCancelAndClose: true
+    }
+  ).then(() => {
+    // 点击"重新提交"，跳转到上传页面
+    router.push('/upload');
+  }).catch(() => {
+    // 点击"我知道了"或关闭弹窗，停留在当前页面
+  });
+}
+
+/** 下载资源 */
+function handleDownloadResource(record: UploadRecord) {
+  if (record.isAudit !== 1) {
+    ElMessage.warning('该资源尚未通过审核，暂不可下载');
+    return;
+  }
+  // 跳转到资源详情页进行下载
+  router.push(`/resource/${record.resourceId}`);
+}
+
+/** 分享资源 */
+function handleShareResource(record: UploadRecord) {
+  if (record.isAudit !== 1) {
+    ElMessage.warning('该资源尚未通过审核，暂不可分享');
+    return;
+  }
+  // 复制分享链接
+  const shareUrl = `${window.location.origin}/resource/${record.resourceId}`;
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    ElMessage.success('分享链接已复制到剪贴板');
+  }).catch(() => {
+    ElMessage.info(`分享链接：${shareUrl}`);
+  });
 }
 
 onMounted(() => {
@@ -731,6 +900,13 @@ onActivated(() => {
   min-height: 400px;
 }
 
+.filter-bar {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
 .resource-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -748,6 +924,16 @@ onActivated(() => {
   &:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
+  }
+
+  &.item-disabled {
+    opacity: 0.8;
+    cursor: default;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
   }
 
   .resource-cover {
@@ -822,7 +1008,24 @@ onActivated(() => {
       margin: 4px 0 0 0;
       font-size: 12px;
       color: #f56c6c;
+
+      &.clickable {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
     }
+  }
+
+  .resource-actions {
+    padding: 0 12px 12px;
+    display: flex;
+    gap: 8px;
   }
 }
 

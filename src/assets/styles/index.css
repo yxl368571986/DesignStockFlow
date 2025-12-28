@@ -95,3 +95,31 @@ select {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* 驳回原因弹窗样式 */
+.reject-reason-content {
+  text-align: left;
+  line-height: 1.8;
+}
+
+.reject-reason-content p {
+  margin: 8px 0;
+  color: #333;
+}
+
+.reject-reason-content .reject-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: #f56c6c;
+  background: #fef0f0;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+.reject-reason-content .tip {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 12px;
+}

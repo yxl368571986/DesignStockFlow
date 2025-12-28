@@ -1,0 +1,34 @@
+             resource_id              |           title            |                                 cover                                 
+--------------------------------------+----------------------------+-----------------------------------------------------------------------
+ ebe206ff-7d9d-46ef-aa7d-4ac37b6fe051 | Photography Work 3         | /uploads/photo-1766849717730-811804878.jpg
+ 9893e802-7575-4e55-906a-b4514245901e | Photography Work 2         | /uploads/photo-1766849322670-818316045.jpg
+ 3e689dda-7d4c-42a3-be6b-016b7a5c2bb6 | Photography Work 1         | /uploads/photo-1766848857586-699330628.jpg
+ f2118a67-0298-443e-adff-ec6b2bb53c6d | 123123                     | /uploads/09139a5401bb1612a8ed2dc0e4a4bdd9-1766840930227-650166657.jpg
+ extra-res-084                        | 手写英文字体               | https://picsum.photos/id/204/800/600
+ extra-res-083                        | 城市夜景摄影               | /uploads/test/city-night.jpg
+ extra-res-082                        | 科技感图标包               | https://picsum.photos/id/202/800/600
+ extra-res-081                        | 企业宣传册模板             | https://picsum.photos/id/201/800/600
+ final-res-080                        | Logo设计素材包             | https://picsum.photos/id/200/800/600
+ res-080                              | 扁平化场景插画             | https://picsum.photos/id/193/800/600
+ res-079                              | 数码产品主图模板           | https://picsum.photos/id/192/800/600
+ res-078                              | 美食摄影图片集             | https://picsum.photos/id/191/800/600
+ res-077                              | 中国风水墨背景             | /uploads/test/ink-bg.png
+ res-076                              | 社交APP界面设计            | https://picsum.photos/id/189/800/600
+ res-073                              | 创意简历模板               | https://picsum.photos/id/186/800/600
+ res-072                              | 金融商务图标集             | https://picsum.photos/id/185/800/600
+ res-071                              | 艺术装饰字体               | https://picsum.photos/id/184/800/600
+ res-069                              | 自然风景摄影图             | /uploads/test/nature.jpg
+ res-068                              | 卡通人物插画素材           | https://picsum.photos/id/181/800/600
+ res-070                              | 几何图形背景素材           | https://picsum.photos/id/170/800/600
+ f8a9b0c1-d2e3-4f56-a789-b0c1d2e3f468 | 卡通人物插画素材           | https://picsum.photos/id/181/800/600
+ res-067                              | 科技风格海报模板           | https://picsum.photos/id/180/800/600
+ 228eac7a-c0ee-452a-8bb3-5c3759d2c750 | 测试上传资源_1766496235001 | https://picsum.photos/id/35/800/600
+ 6b79fe1d-58ef-42c5-997d-6a3dcdf3a392 | 测试上传资源_1766495580789 | https://picsum.photos/id/65/800/600
+ 1b6c164f-2330-4cc4-8066-cb790260b95c | 测试上传资源_1766495433155 | https://picsum.photos/id/60/800/600
+ 8a6810ce-96d7-44e1-9a81-60ac60ef16ab | 测试上传资源_1766495159093 | https://picsum.photos/id/50/800/600
+ d19bdc46-fd42-4664-8a2c-161e9e609b37 | 名片设计模板               | https://picsum.photos/id/55/800/600
+ e7abbe94-4fa4-484e-8889-50eae46e8200 | 简历模板                   | https://picsum.photos/id/30/800/600
+ 8dca3308-a0f4-4dd3-b46e-4318aac2f514 | Excel表格模板              | https://picsum.photos/id/25/800/600
+ 9cc3a233-c3e8-4bff-bbcd-356f637a8a31 | Word文档模板               | https://picsum.photos/id/75/800/600
+(30 �м�¼)
+

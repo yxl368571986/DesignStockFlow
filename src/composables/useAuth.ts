@@ -143,7 +143,7 @@ export function useAuth() {
    * @param password 密码
    * @param confirmPassword 确认密码
    * @param autoRedirect 是否自动跳转到首页（默认true）
-   * @returns Promise<{ success: boolean, error?: string }>
+   * @returns Promise<{ success: boolean, error?: string, errorCode?: string }>
    */
   async function register(
     phone: string,
@@ -151,7 +151,7 @@ export function useAuth() {
     password: string,
     confirmPassword: string,
     autoRedirect: boolean = true
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     // 重置错误状态
     error.value = null;
 
@@ -159,14 +159,14 @@ export function useAuth() {
     if (!validatePhone(phone)) {
       error.value = '请输入正确的手机号';
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      return { success: false, error: error.value, errorCode: 'SMS_001' };
     }
 
     // 验证验证码
     if (!validateVerifyCode(verifyCode)) {
       error.value = '请输入6位数字验证码';
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      return { success: false, error: error.value, errorCode: 'SMS_005' };
     }
 
     // 验证密码
@@ -223,15 +223,21 @@ export function useAuth() {
 
         return { success: true };
       } else {
+        // 从响应中获取错误码
+        const errorCode = (response as { errorCode?: string }).errorCode;
         // 后端会返回"该手机号已注册"等错误信息
-        error.value = response.msg || '注册失败';
+        error.value = getSmsErrorMessage(errorCode, response.msg || '注册失败');
         ElMessage.error(error.value);
-        return { success: false, error: error.value };
+        return { success: false, error: error.value, errorCode };
       }
     } catch (e) {
-      error.value = (e as Error).message || '注册失败，请稍后重试';
+      // 从axios错误响应中提取errorCode
+      const axiosError = e as { response?: { data?: { msg?: string; errorCode?: string } } };
+      const errorCode = axiosError.response?.data?.errorCode;
+      const defaultMsg = axiosError.response?.data?.msg || (e as Error).message || '注册失败，请稍后重试';
+      error.value = getSmsErrorMessage(errorCode, defaultMsg);
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      return { success: false, error: error.value, errorCode };
     } finally {
       loading.value = false;
     }
@@ -267,15 +273,40 @@ export function useAuth() {
   }
 
   /**
+   * SMS错误码到用户提示消息的映射
+   */
+  const smsErrorMessages: Record<string, string> = {
+    SMS_001: '请输入正确的11位手机号',
+    SMS_002: '获取验证码过于频繁，请稍后再试',
+    SMS_003: '今日获取验证码次数已达上限',
+    SMS_004: '验证码发送失败，请稍后重试',
+    SMS_005: '验证码错误，请核对后重新输入',
+    SMS_006: '验证码已过期，请重新获取',
+    SMS_007: '验证码无效或已过期',
+    SMS_008: '操作过于频繁，请稍后再试',
+    SMS_009: '系统异常，请稍后重试',
+  };
+
+  /**
+   * 根据错误码获取用户提示消息
+   */
+  function getSmsErrorMessage(errorCode: string | undefined, defaultMsg: string): string {
+    if (errorCode && smsErrorMessages[errorCode]) {
+      return smsErrorMessages[errorCode];
+    }
+    return defaultMsg;
+  }
+
+  /**
    * 发送验证码
    * @param phone 手机号
    * @param type 验证码类型（register/login/reset）
-   * @returns Promise<{ success: boolean, error?: string }>
+   * @returns Promise<{ success: boolean, error?: string, errorCode?: string }>
    */
   async function sendCode(
     phone: string,
     type: 'register' | 'login' | 'reset' = 'register'
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     // 重置错误状态
     error.value = null;
 
@@ -283,7 +314,7 @@ export function useAuth() {
     if (!validatePhone(phone)) {
       error.value = '请输入正确的手机号';
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      return { success: false, error: error.value, errorCode: 'SMS_001' };
     }
 
     // 检查是否在倒计时中
@@ -321,14 +352,44 @@ export function useAuth() {
 
         return { success: true };
       } else {
-        error.value = response.msg || '发送验证码失败';
+        // 从响应中获取错误码
+        const errorCode = (response as { errorCode?: string }).errorCode;
+        error.value = getSmsErrorMessage(errorCode, response.msg || '发送验证码失败');
         ElMessage.error(error.value);
-        return { success: false, error: error.value };
+        
+        // 如果是频率限制错误，可能需要设置倒计时
+        if (errorCode === 'SMS_002' && (response as { data?: { retryAfter?: number } }).data?.retryAfter) {
+          countdown.value = (response as { data?: { retryAfter?: number } }).data!.retryAfter!;
+          const timer = setInterval(() => {
+            countdown.value--;
+            if (countdown.value <= 0) {
+              clearInterval(timer);
+            }
+          }, 1000);
+        }
+        
+        return { success: false, error: error.value, errorCode };
       }
     } catch (e) {
-      error.value = (e as Error).message || '发送验证码失败，请稍后重试';
+      // 从axios错误响应中提取errorCode
+      const axiosError = e as { response?: { data?: { msg?: string; errorCode?: string; data?: { retryAfter?: number } } } };
+      const errorCode = axiosError.response?.data?.errorCode;
+      const defaultMsg = axiosError.response?.data?.msg || (e as Error).message || '发送验证码失败，请稍后重试';
+      error.value = getSmsErrorMessage(errorCode, defaultMsg);
       ElMessage.error(error.value);
-      return { success: false, error: error.value };
+      
+      // 如果是频率限制错误，设置倒计时
+      if (errorCode === 'SMS_002' && axiosError.response?.data?.data?.retryAfter) {
+        countdown.value = axiosError.response.data.data.retryAfter;
+        const timer = setInterval(() => {
+          countdown.value--;
+          if (countdown.value <= 0) {
+            clearInterval(timer);
+          }
+        }, 1000);
+      }
+      
+      return { success: false, error: error.value, errorCode };
     } finally {
       sendingCode.value = false;
     }

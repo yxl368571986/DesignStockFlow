@@ -39,6 +39,14 @@ router.post(
 );
 
 /**
+ * 完成分片上传后创建资源
+ * POST /api/v1/resources/complete-upload
+ * 需要认证
+ * 用于分片上传完成后，创建资源记录
+ */
+router.post('/complete-upload', authenticate, resourceController.completeChunkUpload);
+
+/**
  * VIP批量下载 (Task 3.6)
  * POST /api/v1/resources/batch-download
  * 需要认证，仅VIP用户可用

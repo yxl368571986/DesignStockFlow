@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import { config } from '@/config/index.js';
 import { logger } from '@/utils/logger.js';
 import { errorHandler, notFoundHandler } from '@/middlewares/errorHandler.js';
@@ -24,6 +25,7 @@ app.use(
   helmet({
     contentSecurityPolicy: false, // 根据需要配置CSP
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false, // 允许跨域资源访问
   })
 );
 
@@ -56,6 +58,66 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-TOKEN'],
   })
 );
+
+/**
+ * 静态文件服务 - 提供上传文件的访问
+ * 必须在 CORS 之后配置，以便跨域请求能正常访问
+ */
+const uploadsPath = path.resolve(process.cwd(), 'uploads');
+
+// MIME 类型映射表
+const mimeTypes: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
+  '.zip': 'application/zip',
+  '.rar': 'application/x-rar-compressed',
+  '.psd': 'image/vnd.adobe.photoshop',
+  '.ai': 'application/postscript',
+  '.eps': 'application/postscript',
+  '.cdr': 'application/cdr',
+  '.sketch': 'application/sketch',
+  '.xd': 'application/xd',
+  '.figma': 'application/figma',
+};
+
+app.use('/uploads', express.static(uploadsPath, {
+  // 设置跨域响应头和正确的 Content-Type，允许前端访问
+  setHeaders: (res, filePath) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // 根据文件扩展名设置正确的 Content-Type
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = mimeTypes[ext];
+    if (mimeType) {
+      res.setHeader('Content-Type', mimeType);
+    }
+  }
+}));
+logger.info(`📁 Static files served from: ${uploadsPath}`);
+
+// 同时为 /files 路径提供静态文件服务（兼容旧数据）
+const filesPath = path.resolve(process.cwd(), 'files');
+app.use('/files', express.static(filesPath, {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeType = mimeTypes[ext];
+    if (mimeType) {
+      res.setHeader('Content-Type', mimeType);
+    }
+  }
+}));
+logger.info(`📁 Static files also served from: ${filesPath}`);
 
 // 限流 - 开发环境放宽限制以支持E2E测试
 const limiter = rateLimit({
@@ -216,6 +278,16 @@ logger.info('📄 Content routes loaded');
 import favoriteRoutes from '@/routes/favorite.js';
 app.use('/api/v1/favorites', favoriteRoutes);
 logger.info('⭐ Favorite routes loaded');
+
+// 分片上传路由
+import chunkUploadRoutes from '@/routes/chunkUploadRoutes.js';
+app.use('/api/v1/upload', chunkUploadRoutes);
+logger.info('📤 Chunk upload routes loaded');
+
+// 通知路由
+import notificationRoutes from '@/routes/notificationRoutes.js';
+app.use('/api/v1/notifications', notificationRoutes);
+logger.info('🔔 Notification routes loaded');
 
 // 启动VIP定时任务
 import { startVipScheduler } from '@/services/vipScheduler.js';

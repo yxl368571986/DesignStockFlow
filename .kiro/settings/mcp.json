@@ -5,7 +5,7 @@
       "args": [
         "mcp"
       ],
-      "disabled": false,
+      "disabled": true,
       "autoApprove": [
         "semgrep_scan"
       ]
@@ -16,7 +16,7 @@
         "-y",
         "@upstash/context7-mcp@latest"
       ],
-      "disabled": false,
+      "disabled": true,
       "autoApprove": [
         "resolve-library-id",
         "get-library-docs"
@@ -28,11 +28,12 @@
         "-y",
         "@playwright/mcp@latest"
       ],
-      "disabled": false,
+      "disabled": true,
       "autoApprove": [
         "browser_click",
         "browser_snapshot",
-        "browser_console_messages"
+        "browser_console_messages",
+        "browser_take_screenshot"
       ]
     },
     "github": {

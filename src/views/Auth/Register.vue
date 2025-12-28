@@ -177,6 +177,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { Phone, Message, Lock, View, Hide } from '@element-plus/icons-vue';
 import { useAuth } from '@/composables/useAuth';
 import { validatePhone, validatePassword, validateVerifyCode } from '@/utils/validate';
@@ -298,17 +299,24 @@ const registerRules: FormRules = {
  * 处理发送验证码
  */
 async function handleSendCode() {
-  // 先验证手机号
+  // 先验证手机号和密码是否已填写
   if (!registerFormRef.value) return;
 
+  // 检查手机号和密码是否都已填写
+  if (!registerForm.phone || !registerForm.password) {
+    ElMessage.warning('请先填写账号和密码');
+    return;
+  }
+
   try {
-    await registerFormRef.value.validateField('phone');
+    // 验证手机号和密码格式
+    await registerFormRef.value.validateField(['phone', 'password']);
 
     // 调用发送验证码方法
     await sendCode(registerForm.phone, 'register');
   } catch (error) {
-    // 手机号验证失败
-    console.error('手机号验证失败:', error);
+    // 验证失败
+    console.error('表单验证失败:', error);
   }
 }
 

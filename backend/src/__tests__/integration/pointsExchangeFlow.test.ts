@@ -3,37 +3,40 @@
  * 测试完整的积分兑换VIP流程
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MockFn = jest.Mock<any>;
 
 // Mock Prisma Client
 const mockPrismaClient = {
   users: {
-    findUnique: vi.fn(),
-    update: vi.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
   },
   vip_packages: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
+    findUnique: jest.fn(),
+    findMany: jest.fn(),
   },
   points_vip_exchanges: {
-    create: vi.fn(),
-    findFirst: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
   },
   point_records: {
-    create: vi.fn(),
-    findMany: vi.fn(),
+    create: jest.fn(),
+    findMany: jest.fn(),
   },
-  $transaction: vi.fn((callback) => callback(mockPrismaClient)),
+  $transaction: jest.fn((callback: (client: typeof mockPrismaClient) => Promise<unknown>) => callback(mockPrismaClient)),
 };
 
-vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn(() => mockPrismaClient),
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn(() => mockPrismaClient),
 }));
 
-vi.mock('../../config/payment', () => ({
-  getPaymentConfig: vi.fn(() => ({
+jest.mock('../../config/payment', () => ({
+  getPaymentConfig: jest.fn(() => ({
     points: {
       exchangeRatio: 100, // 100积分 = 1天VIP
       maxExchangeDaysPerMonth: 90, // 每月最多兑换90天
@@ -42,11 +45,11 @@ vi.mock('../../config/payment', () => ({
   })),
 }));
 
-vi.mock('../../utils/logger', () => ({
+jest.mock('../../utils/logger', () => ({
   default: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
   },
 }));
 
@@ -69,12 +72,12 @@ describe('积分兑换VIP流程集成测试', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockPrismaClient.users.findUnique.mockResolvedValue(mockUser);
+    jest.clearAllMocks();
+    (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(mockUser);
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('积分兑换资格检查', () => {
@@ -87,7 +90,7 @@ describe('积分兑换VIP流程集成测试', () => {
 
     it('积分不足时不能兑换', async () => {
       const poorUser = { ...mockUser, points: 1000 };
-      mockPrismaClient.users.findUnique.mockResolvedValue(poorUser);
+      (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(poorUser);
 
       const exchangeDays = 30;
       const requiredPoints = exchangeDays * 100; // 3000积分
@@ -97,14 +100,14 @@ describe('积分兑换VIP流程集成测试', () => {
 
     it('终身会员不能兑换', async () => {
       const lifetimeUser = { ...mockUser, is_lifetime_vip: true };
-      mockPrismaClient.users.findUnique.mockResolvedValue(lifetimeUser);
+      (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(lifetimeUser);
 
       expect(lifetimeUser.is_lifetime_vip).toBe(true);
     });
 
     it('本月已兑换超过限额时不能继续兑换', async () => {
       // 模拟本月已兑换60天
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([
         { exchange_days: 30, created_at: new Date() },
         { exchange_days: 30, created_at: new Date() },
       ]);
@@ -114,7 +117,7 @@ describe('积分兑换VIP流程集成测试', () => {
           user_id: mockUser.user_id,
           created_at: { gte: new Date(new Date().setDate(1)) }, // 本月1号
         },
-      });
+      }) as Array<{ exchange_days: number }>;
 
       const totalExchangedDays = existingExchanges.reduce(
         (sum: number, e: { exchange_days: number }) => sum + e.exchange_days,
@@ -133,21 +136,21 @@ describe('积分兑换VIP流程集成测试', () => {
       const requiredPoints = exchangeDays * 100;
       const newExpireAt = new Date(Date.now() + exchangeDays * 24 * 60 * 60 * 1000);
 
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([]);
-      mockPrismaClient.users.update.mockResolvedValue({
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([]);
+      (mockPrismaClient.users.update as MockFn).mockResolvedValue({
         ...mockUser,
         points: mockUser.points - requiredPoints,
         vip_level: 1,
         vip_expire_at: newExpireAt,
       });
-      mockPrismaClient.points_vip_exchanges.create.mockResolvedValue({
+      (mockPrismaClient.points_vip_exchanges.create as MockFn).mockResolvedValue({
         exchange_id: 'exchange-001',
         user_id: mockUser.user_id,
         points_used: requiredPoints,
         exchange_days: exchangeDays,
         created_at: new Date(),
       });
-      mockPrismaClient.point_records.create.mockResolvedValue({
+      (mockPrismaClient.point_records.create as MockFn).mockResolvedValue({
         record_id: 'record-001',
         user_id: mockUser.user_id,
         points: -requiredPoints,
@@ -187,14 +190,14 @@ describe('积分兑换VIP流程集成测试', () => {
         });
 
         return { user: updatedUser, exchange };
-      });
+      }) as { user: { vip_level: number; points: number }; exchange: unknown };
 
       expect(result.user.vip_level).toBe(1);
       expect(result.user.points).toBe(mockUser.points - requiredPoints);
     });
 
     it('应该成功续费VIP（已有VIP用户）', async () => {
-      mockPrismaClient.users.findUnique.mockResolvedValue(mockVipUser);
+      (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(mockVipUser);
 
       const exchangeDays = 30;
       const requiredPoints = exchangeDays * 100;
@@ -202,8 +205,8 @@ describe('积分兑换VIP流程集成测试', () => {
       const originalExpireAt = mockVipUser.vip_expire_at!;
       const newExpireAt = new Date(originalExpireAt.getTime() + exchangeDays * 24 * 60 * 60 * 1000);
 
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([]);
-      mockPrismaClient.users.update.mockResolvedValue({
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([]);
+      (mockPrismaClient.users.update as MockFn).mockResolvedValue({
         ...mockVipUser,
         points: mockVipUser.points - requiredPoints,
         vip_expire_at: newExpireAt,
@@ -215,13 +218,13 @@ describe('积分兑换VIP流程集成测试', () => {
           points: { decrement: requiredPoints },
           vip_expire_at: newExpireAt,
         },
-      });
+      }) as { vip_expire_at: Date };
 
       expect(result.vip_expire_at.getTime()).toBeGreaterThan(originalExpireAt.getTime());
     });
 
     it('兑换失败时应该回滚事务', async () => {
-      mockPrismaClient.$transaction.mockRejectedValue(new Error('数据库错误'));
+      (mockPrismaClient.$transaction as MockFn).mockRejectedValue(new Error('数据库错误'));
 
       await expect(
         mockPrismaClient.$transaction(async () => {
@@ -232,7 +235,7 @@ describe('积分兑换VIP流程集成测试', () => {
       // 确保用户积分未变
       const user = await mockPrismaClient.users.findUnique({
         where: { user_id: mockUser.user_id },
-      });
+      }) as { points: number } | null;
       expect(user?.points).toBe(mockUser.points);
     });
   });
@@ -256,12 +259,12 @@ describe('积分兑换VIP流程集成测试', () => {
         },
       ];
 
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue(mockExchanges);
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue(mockExchanges);
 
       const exchanges = await mockPrismaClient.points_vip_exchanges.findMany({
         where: { user_id: mockUser.user_id },
         orderBy: { created_at: 'desc' },
-      });
+      }) as Array<{ exchange_days: number }>;
 
       expect(exchanges).toHaveLength(2);
       expect(exchanges[0].exchange_days).toBe(30);
@@ -273,7 +276,7 @@ describe('积分兑换VIP流程集成测试', () => {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([
         { exchange_days: 30, created_at: new Date() },
       ]);
 
@@ -282,7 +285,7 @@ describe('积分兑换VIP流程集成测试', () => {
           user_id: mockUser.user_id,
           created_at: { gte: startOfMonth },
         },
-      });
+      }) as Array<{ exchange_days: number }>;
 
       const totalDays = exchanges.reduce(
         (sum: number, e: { exchange_days: number }) => sum + e.exchange_days,
@@ -295,7 +298,7 @@ describe('积分兑换VIP流程集成测试', () => {
 
   describe('兑换信息获取', () => {
     it('应该正确返回兑换信息', async () => {
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([
         { exchange_days: 30, created_at: new Date() },
       ]);
 
@@ -305,7 +308,7 @@ describe('积分兑换VIP流程集成测试', () => {
 
       const exchanges = await mockPrismaClient.points_vip_exchanges.findMany({
         where: { user_id: user.user_id },
-      });
+      }) as Array<{ exchange_days: number }>;
 
       const exchangedThisMonth = exchanges.reduce(
         (sum: number, e: { exchange_days: number }) => sum + e.exchange_days,
@@ -337,7 +340,7 @@ describe('积分兑换VIP流程集成测试', () => {
       const requiredPoints = minDays * 100;
       const userWithExactPoints = { ...mockUser, points: requiredPoints };
 
-      mockPrismaClient.users.findUnique.mockResolvedValue(userWithExactPoints);
+      (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(userWithExactPoints);
 
       expect(userWithExactPoints.points).toBe(requiredPoints);
     });
@@ -347,19 +350,19 @@ describe('积分兑换VIP流程集成测试', () => {
       const requiredPoints = minDays * 100;
       const userWithLessPoints = { ...mockUser, points: requiredPoints - 1 };
 
-      mockPrismaClient.users.findUnique.mockResolvedValue(userWithLessPoints);
+      (mockPrismaClient.users.findUnique as MockFn).mockResolvedValue(userWithLessPoints);
 
       expect(userWithLessPoints.points).toBeLessThan(requiredPoints);
     });
 
     it('本月剩余可兑换天数为0时不能兑换', async () => {
-      mockPrismaClient.points_vip_exchanges.findMany.mockResolvedValue([
+      (mockPrismaClient.points_vip_exchanges.findMany as MockFn).mockResolvedValue([
         { exchange_days: 90, created_at: new Date() },
       ]);
 
       const exchanges = await mockPrismaClient.points_vip_exchanges.findMany({
         where: { user_id: mockUser.user_id },
-      });
+      }) as Array<{ exchange_days: number }>;
 
       const totalExchanged = exchanges.reduce(
         (sum: number, e: { exchange_days: number }) => sum + e.exchange_days,

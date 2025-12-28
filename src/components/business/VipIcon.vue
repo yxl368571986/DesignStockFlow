@@ -7,6 +7,8 @@
  * - 终身标签：红色背景白色文字
  */
 
+import { computed } from 'vue';
+
 interface Props {
   /** VIP状态: active-有效, grace-宽限期, lifetime-终身, none-非VIP */
   status?: 'active' | 'grace' | 'lifetime' | 'none';
@@ -51,8 +53,6 @@ const showIcon = computed(() => {
 const showLabel = computed(() => {
   return props.status === 'lifetime' && props.showLifetimeLabel;
 });
-
-import { computed } from 'vue';
 </script>
 
 <template>

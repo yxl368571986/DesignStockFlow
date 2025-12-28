@@ -6,9 +6,20 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ApiResponse<T = any> {
   code: number;
-  msg: string;
+  msg?: string;
+  message?: string;
   data: T;
-  timestamp: number;
+  timestamp?: number;
+}
+
+/**
+ * 检查API响应是否成功
+ * 后端API使用 code: 0 表示成功，部分旧接口使用 code: 200
+ * @param res API响应对象
+ * @returns 是否成功
+ */
+export function isApiSuccess(res: ApiResponse): boolean {
+  return res.code === 0 || res.code === 200;
 }
 
 // 分页响应

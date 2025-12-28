@@ -1,33 +1,35 @@
-<!--
-  内容审核页面
-  
-  功能：
-  - 显示待审核资源列表
-  - 按提交时间倒序排列
-  - 显示资源缩略图、标题、上传者、提交时间
-  - 支持审核操作（通过/驳回）
-  - 支持筛选和批量操作
-  
-  需求: 需求13.1, 需求13.2, 需求13.3, 需求13.4, 需求13.5, 需求13.6, 需求13.7, 需求13.8, 需求13.9, 需求13.10, 需求13.11, 需求13.12
--->
-
 <template>
   <div class="audit-page">
-    <!-- 页面标题 -->
     <div class="page-header">
-      <h2 class="page-title">内容审核</h2>
+      <h2 class="page-title">
+        内容审核
+      </h2>
       <div class="page-actions">
-        <el-badge :value="pendingCount" :hidden="pendingCount === 0" class="badge">
-          <el-button type="primary" :icon="Refresh" @click="loadResources">
+        <el-badge
+          :value="pendingCount"
+          :hidden="pendingCount === 0"
+          class="badge"
+        >
+          <el-button
+            type="primary"
+            :icon="Refresh"
+            @click="loadResources"
+          >
             刷新列表
           </el-button>
         </el-badge>
       </div>
     </div>
 
-    <!-- 筛选栏 -->
-    <el-card class="filter-card" shadow="never">
-      <el-form :inline="true" :model="filterForm" class="filter-form">
+    <el-card
+      class="filter-card"
+      shadow="never"
+    >
+      <el-form
+        :inline="true"
+        :model="filterForm"
+        class="filter-form"
+      >
         <el-form-item label="分类">
           <el-select
             v-model="filterForm.categoryId"
@@ -44,7 +46,6 @@
             />
           </el-select>
         </el-form-item>
-
         <el-form-item label="上传者">
           <el-input
             v-model="filterForm.uploader"
@@ -55,107 +56,138 @@
             @keyup.enter="handleFilter"
           >
             <template #append>
-              <el-button :icon="Search" @click="handleFilter" />
+              <el-button
+                :icon="Search"
+                @click="handleFilter"
+              />
             </template>
           </el-input>
         </el-form-item>
-
-        <el-form-item label="提交时间">
-          <el-date-picker
-            v-model="filterForm.dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            value-format="YYYY-MM-DD"
-            style="width: 240px"
-            @change="handleFilter"
-          />
-        </el-form-item>
-
         <el-form-item>
-          <el-button @click="handleResetFilter">重置</el-button>
+          <el-button @click="handleResetFilter">
+            重置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- 批量操作栏 -->
-    <el-card v-if="selectedResources.length > 0" class="batch-actions-card" shadow="never">
+    <el-card
+      v-if="selectedResources.length > 0"
+      class="batch-actions-card"
+      shadow="never"
+    >
       <div class="batch-actions">
         <span class="selected-count">已选择 {{ selectedResources.length }} 项</span>
         <div class="actions">
-          <el-button type="success" :icon="Select" @click="handleBatchApprove">
+          <el-button
+            type="success"
+            :icon="Select"
+            @click="handleBatchApprove"
+          >
             批量通过
           </el-button>
-          <el-button type="danger" :icon="Close" @click="handleBatchReject">
+          <el-button
+            type="danger"
+            :icon="Close"
+            @click="handleBatchReject"
+          >
             批量驳回
           </el-button>
-          <el-button @click="handleClearSelection">取消选择</el-button>
+          <el-button @click="handleClearSelection">
+            取消选择
+          </el-button>
         </div>
       </div>
     </el-card>
 
-    <!-- 资源列表 -->
-    <el-card class="table-card" shadow="never">
+    <el-card
+      class="table-card"
+      shadow="never"
+    >
       <el-table
         v-loading="loading"
         :data="resources"
         stripe
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="55" />
-        
-        <el-table-column label="资源信息" min-width="300">
+        <el-table-column
+          type="selection"
+          width="55"
+        />
+        <el-table-column
+          label="资源信息"
+          min-width="300"
+        >
           <template #default="{ row }">
             <div class="resource-info">
               <el-image
-                :src="row.cover"
+                :src="getFullImageUrl(row.thumbnail, row.resourceId)"
                 fit="cover"
                 class="resource-cover"
-                :preview-src-list="[row.cover]"
+                :preview-src-list="row.thumbnail ? [getFullImageUrl(row.thumbnail, row.resourceId)] : []"
               >
                 <template #error>
                   <div class="image-error">
-                    <el-icon><Picture /></el-icon>
+                    <el-icon>
+                      <Picture />
+                    </el-icon>
                   </div>
                 </template>
               </el-image>
               <div class="resource-details">
-                <div class="resource-title">{{ row.title }}</div>
+                <div class="resource-title">
+                  {{ row.title }}
+                </div>
                 <div class="resource-meta">
-                  <el-tag size="small" type="info">{{ row.category?.category_name || '未分类' }}</el-tag>
+                  <el-tag
+                    size="small"
+                    type="info"
+                  >
+                    {{ row.fileFormat }}
+                  </el-tag>
                   <span class="meta-item">
-                    <el-icon><Document /></el-icon>
-                    {{ row.file_format }}
+                    <el-icon>
+                      <Document />
+                    </el-icon>
+                    {{ row.fileName }}
                   </span>
                   <span class="meta-item">
-                    <el-icon><Files /></el-icon>
-                    {{ formatFileSize(row.file_size) }}
+                    <el-icon>
+                      <Files />
+                    </el-icon>
+                    {{ formatFileSize(row.fileSize) }}
                   </span>
                 </div>
               </div>
             </div>
           </template>
         </el-table-column>
-
-        <el-table-column label="上传者" width="150">
+        <el-table-column
+          label="上传者"
+          width="150"
+        >
           <template #default="{ row }">
             <div class="uploader-info">
-              <el-avatar :src="row.user?.avatar" :size="32">
-                {{ row.user?.nickname?.charAt(0) }}
+              <el-avatar :size="32">
+                {{ row.uploaderName?.charAt(0) || '?' }}
               </el-avatar>
-              <span class="uploader-name">{{ row.user?.nickname }}</span>
+              <span class="uploader-name">{{ row.uploaderName || '未知用户' }}</span>
             </div>
           </template>
         </el-table-column>
-
-        <el-table-column label="提交时间" width="180">
+        <el-table-column
+          label="提交时间"
+          width="180"
+        >
           <template #default="{ row }">
-            {{ formatDate(row.created_at) }}
+            {{ formatDate(row.uploadTime) }}
           </template>
         </el-table-column>
-
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column
+          label="操作"
+          width="200"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -168,8 +200,6 @@
           </template>
         </el-table-column>
       </el-table>
-
-      <!-- 分页 -->
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="pagination.page"
@@ -183,67 +213,122 @@
       </div>
     </el-card>
 
-    <!-- 资源详情对话框 -->
     <el-dialog
       v-model="detailDialogVisible"
       title="资源详情"
       width="900px"
       :close-on-click-modal="false"
     >
-      <div v-if="currentResource" class="resource-detail">
-        <!-- 基本信息 -->
+      <div
+        v-if="currentResource"
+        class="resource-detail"
+      >
         <div class="detail-section">
-          <h3 class="section-title">基本信息</h3>
-          <el-descriptions :column="2" border>
+          <h3 class="section-title">
+            基本信息
+          </h3>
+          <el-descriptions
+            :column="2"
+            border
+          >
             <el-descriptions-item label="资源标题">
               {{ currentResource.title }}
             </el-descriptions-item>
-            <el-descriptions-item label="资源分类">
-              {{ currentResource.category?.category_name || '未分类' }}
+            <el-descriptions-item label="文件名">
+              {{ currentResource.fileName }}
             </el-descriptions-item>
             <el-descriptions-item label="文件格式">
-              {{ currentResource.file_format }}
+              {{ currentResource.fileFormat }}
             </el-descriptions-item>
             <el-descriptions-item label="文件大小">
-              {{ formatFileSize(currentResource.file_size) }}
+              {{ formatFileSize(currentResource.fileSize) }}
             </el-descriptions-item>
             <el-descriptions-item label="上传者">
-              {{ currentResource.user?.nickname }}
+              {{ currentResource.uploaderName }}
             </el-descriptions-item>
             <el-descriptions-item label="提交时间">
-              {{ formatDate(currentResource.created_at) }}
-            </el-descriptions-item>
-            <el-descriptions-item label="资源描述" :span="2">
-              {{ currentResource.description || '无描述' }}
+              {{ formatDate(currentResource.uploadTime) }}
             </el-descriptions-item>
           </el-descriptions>
         </div>
-
-        <!-- 预览图片 -->
-        <div class="detail-section">
-          <h3 class="section-title">预览图片</h3>
+        <div
+          v-if="currentResource.thumbnail"
+          class="detail-section"
+        >
+          <h3 class="section-title">
+            预览图片
+          </h3>
           <div class="preview-images">
             <el-image
-              v-for="(img, index) in getPreviewImages(currentResource)"
-              :key="index"
-              :src="img"
+              :src="getFullImageUrl(currentResource.thumbnail, currentResource.resourceId)"
               fit="cover"
               class="preview-image"
-              :preview-src-list="getPreviewImages(currentResource)"
-              :initial-index="index"
-            >
-              <template #error>
-                <div class="image-error">
-                  <el-icon><Picture /></el-icon>
-                </div>
-              </template>
-            </el-image>
+              :preview-src-list="[getFullImageUrl(currentResource.thumbnail, currentResource.resourceId)]"
+            />
           </div>
         </div>
-
-        <!-- 审核操作 -->
+        <div
+          v-if="currentResource.extractedFiles?.length"
+          class="detail-section"
+        >
+          <h3 class="section-title">
+            解压文件列表
+          </h3>
+          <el-table
+            :data="currentResource.extractedFiles"
+            size="small"
+          >
+            <el-table-column
+              prop="fileName"
+              label="文件名"
+            />
+            <el-table-column
+              prop="fileFormat"
+              label="格式"
+              width="100"
+            />
+            <el-table-column
+              label="大小"
+              width="100"
+            >
+              <template #default="{ row }">
+                {{ formatFileSize(row.fileSize) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="状态"
+              width="100"
+            >
+              <template #default="{ row }">
+                <el-tag
+                  v-if="row.isIllegal"
+                  type="danger"
+                  size="small"
+                >
+                  非法
+                </el-tag>
+                <el-tag
+                  v-else-if="row.isValid"
+                  type="success"
+                  size="small"
+                >
+                  有效
+                </el-tag>
+                <el-tag
+                  v-else
+                  type="warning"
+                  size="small"
+                >
+                  无效
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
         <div class="detail-section">
-          <h3 class="section-title">审核操作</h3>
+          <h3 class="section-title">
+            审核操作
+          </h3>
           <div class="audit-actions">
             <el-button
               type="success"
@@ -266,28 +351,52 @@
       </div>
     </el-dialog>
 
-    <!-- 驳回原因对话框 -->
     <el-dialog
       v-model="rejectDialogVisible"
       title="审核驳回"
       width="500px"
       :close-on-click-modal="false"
     >
-      <el-form :model="rejectForm" :rules="rejectRules" ref="rejectFormRef">
-        <el-form-item label="驳回原因" prop="reason">
+      <el-form
+        ref="rejectFormRef"
+        :model="rejectForm"
+        :rules="rejectRules"
+      >
+        <el-form-item
+          label="驳回原因"
+          prop="reason"
+        >
+          <el-select
+            v-model="rejectForm.reasonCode"
+            placeholder="选择驳回原因"
+            style="width: 100%; margin-bottom: 12px"
+          >
+            <el-option
+              v-for="reason in rejectReasons"
+              :key="reason.code"
+              :label="reason.label"
+              :value="reason.code"
+            />
+          </el-select>
           <el-input
             v-model="rejectForm.reason"
             type="textarea"
             :rows="5"
-            placeholder="请输入驳回原因，将通知给上传者"
+            placeholder="请输入驳回原因详情"
             maxlength="500"
             show-word-limit
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="submitting" @click="handleConfirmReject">
+        <el-button @click="rejectDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="danger"
+          :loading="submitting"
+          @click="handleConfirmReject"
+        >
           确认驳回
         </el-button>
       </template>
@@ -308,166 +417,138 @@ import {
   Document,
   Files
 } from '@element-plus/icons-vue';
-import { getAuditResources, auditResource } from '@/api/audit';
+import {
+  getAuditList,
+  approveResource,
+  rejectResource,
+  batchApprove,
+  batchReject,
+  getRejectReasons,
+  type AuditListItem,
+  type RejectReason
+} from '@/api/audit';
 import { getCategories } from '@/api/content';
-import type { AuditResource, Category } from '@/types/models';
+import type { Category } from '@/types/models';
+import { getFullImageUrl } from '@/utils/url';
 
-// 加载状态
 const loading = ref(false);
 const submitting = ref(false);
-
-// 待审核资源列表
-const resources = ref<AuditResource[]>([]);
-const pendingCount = computed(() => resources.value.length);
-
-// 分类列表
+const resources = ref<AuditListItem[]>([]);
 const categories = ref<Category[]>([]);
-
-// 分页
-const pagination = reactive({
-  page: 1,
-  pageSize: 20,
-  total: 0
-});
-
-// 筛选表单
-const filterForm = reactive({
-  categoryId: '',
-  uploader: '',
-  dateRange: [] as string[]
-});
-
-// 选中的资源
-const selectedResources = ref<AuditResource[]>([]);
-
-// 详情对话框
+const rejectReasons = ref<RejectReason[]>([]);
+const pagination = reactive({ page: 1, pageSize: 20, total: 0 });
+const filterForm = reactive({ categoryId: '', uploader: '' });
+const selectedResources = ref<AuditListItem[]>([]);
 const detailDialogVisible = ref(false);
-const currentResource = ref<AuditResource | null>(null);
-
-// 驳回对话框
+const currentResource = ref<AuditListItem | null>(null);
 const rejectDialogVisible = ref(false);
 const rejectFormRef = ref<FormInstance>();
-const rejectForm = reactive({
-  reason: ''
-});
+const rejectForm = reactive({ reasonCode: '', reason: '' });
 const rejectRules: FormRules = {
   reason: [
     { required: true, message: '请输入驳回原因', trigger: 'blur' },
     { min: 5, message: '驳回原因至少5个字符', trigger: 'blur' }
   ]
 };
-
-// 当前操作的资源（用于单个驳回）
-const currentRejectResource = ref<AuditResource | null>(null);
-// 批量驳回标记
+const currentRejectResource = ref<AuditListItem | null>(null);
 const isBatchReject = ref(false);
+const pendingCount = computed(() => pagination.total);
 
-/**
- * 加载待审核资源列表
- */
 const loadResources = async () => {
   try {
     loading.value = true;
-    const params: any = {
-      page: pagination.page,
-      pageSize: pagination.pageSize
-    };
-
-    // 添加筛选条件
-    if (filterForm.categoryId) {
-      params.categoryId = filterForm.categoryId;
+    const res = await getAuditList({
+      pageNum: pagination.page,
+      pageSize: pagination.pageSize,
+      uploaderId: filterForm.uploader || undefined
+    });
+    // 后端API使用 code: 0 表示成功
+    if ((res.code === 200 || res.code === 0) && res.data) {
+      resources.value = res.data.list || [];
+      pagination.total = res.data.total || 0;
+    } else {
+      resources.value = [];
+      pagination.total = 0;
     }
-    if (filterForm.uploader) {
-      params.uploader = filterForm.uploader;
-    }
-    if (filterForm.dateRange && filterForm.dateRange.length === 2) {
-      params.startDate = filterForm.dateRange[0];
-      params.endDate = filterForm.dateRange[1];
-    }
-
-    const res = await getAuditResources(params);
-    resources.value = res.data?.list || [];
-    pagination.total = res.data?.pagination?.total || 0;
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载待审核资源失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    ElMessage.error(err.message || '加载待审核资源失败');
+    resources.value = [];
+    pagination.total = 0;
   } finally {
     loading.value = false;
   }
 };
 
-/**
- * 加载分类列表
- */
 const loadCategories = async () => {
   try {
     const res = await getCategories();
-    // res是AxiosResponse，res.data是ApiResponse，res.data.data才是实际数据
-    const responseData = res.data as any;
-    const categoryList = responseData.code === 200 && responseData.data 
-      ? (Array.isArray(responseData.data) ? responseData.data : [])
-      : [];
-    // 转换CategoryInfo到Category格式
-    categories.value = categoryList.map((cat: any) => ({
+    const responseData = res.data as { code?: number; data?: Category[] };
+    const categoryList =
+      responseData.code === 200 && responseData.data
+        ? Array.isArray(responseData.data)
+          ? responseData.data
+          : []
+        : [];
+    categories.value = categoryList.map((cat) => ({
       categoryId: cat.categoryId,
       categoryName: cat.categoryName,
       categoryCode: cat.categoryCode,
       parentId: cat.parentId,
       icon: cat.icon,
-      sortOrder: cat.sort,
+      sortOrder: cat.sortOrder,
       isHot: cat.isHot,
       isRecommend: cat.isRecommend,
       resourceCount: cat.resourceCount
     }));
-  } catch (error: any) {
-    console.error('加载分类失败:', error);
+  } catch {
     categories.value = [];
   }
 };
 
-/**
- * 处理筛选
- */
+const loadRejectReasons = async () => {
+  try {
+    const res = await getRejectReasons();
+    // 后端API使用 code: 0 表示成功
+    if ((res.code === 200 || res.code === 0) && res.data) {
+      rejectReasons.value = res.data;
+    }
+  } catch {
+    rejectReasons.value = [
+      { code: 'INVALID_FORMAT', label: '文件格式不符合要求' },
+      { code: 'LOW_QUALITY', label: '资源质量不达标' },
+      { code: 'DUPLICATE', label: '重复上传' },
+      { code: 'ILLEGAL_CONTENT', label: '包含违规内容' },
+      { code: 'CUSTOM', label: '其他原因' }
+    ];
+  }
+};
+
 const handleFilter = () => {
   pagination.page = 1;
   loadResources();
 };
 
-/**
- * 重置筛选
- */
 const handleResetFilter = () => {
   filterForm.categoryId = '';
   filterForm.uploader = '';
-  filterForm.dateRange = [];
   handleFilter();
 };
 
-/**
- * 处理选择变化
- */
-const handleSelectionChange = (selection: AuditResource[]) => {
+const handleSelectionChange = (selection: AuditListItem[]) => {
   selectedResources.value = selection;
 };
 
-/**
- * 清除选择
- */
 const handleClearSelection = () => {
   selectedResources.value = [];
 };
 
-/**
- * 查看详情
- */
-const handleViewDetail = (resource: AuditResource) => {
+const handleViewDetail = (resource: AuditListItem) => {
   currentResource.value = resource;
   detailDialogVisible.value = true;
 };
 
-/**
- * 审核通过
- */
-const handleApprove = async (resource: AuditResource) => {
+const handleApprove = async (resource: AuditListItem) => {
   try {
     await ElMessageBox.confirm(
       `确认通过资源《${resource.title}》的审核吗？`,
@@ -478,86 +559,71 @@ const handleApprove = async (resource: AuditResource) => {
         type: 'success'
       }
     );
-
     submitting.value = true;
-    await auditResource(resource.resource_id, {
-      action: 'approve'
-    });
-
+    await approveResource(resource.resourceId);
     ElMessage.success('审核通过成功');
     detailDialogVisible.value = false;
     loadResources();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '审核通过失败');
+      const err = error as Error;
+      ElMessage.error(err.message || '审核通过失败');
     }
   } finally {
     submitting.value = false;
   }
 };
 
-/**
- * 审核驳回
- */
-const handleReject = (resource: AuditResource) => {
+const handleReject = (resource: AuditListItem) => {
   currentRejectResource.value = resource;
   isBatchReject.value = false;
+  rejectForm.reasonCode = '';
   rejectForm.reason = '';
   rejectDialogVisible.value = true;
 };
 
-/**
- * 确认驳回
- */
 const handleConfirmReject = async () => {
   if (!rejectFormRef.value) return;
-
   try {
     await rejectFormRef.value.validate();
     submitting.value = true;
-
+    const reasonCode = rejectForm.reasonCode || 'CUSTOM';
+    const reasonDetail = rejectForm.reason;
     if (isBatchReject.value) {
-      // 批量驳回
-      await Promise.all(
-        selectedResources.value.map(resource =>
-          auditResource(resource.resource_id, {
-            action: 'reject',
-            reason: rejectForm.reason
-          })
-        )
-      );
-      ElMessage.success(`成功驳回 ${selectedResources.value.length} 个资源`);
-      selectedResources.value = [];
-    } else {
-      // 单个驳回
-      if (currentRejectResource.value) {
-        await auditResource(currentRejectResource.value.resource_id, {
-          action: 'reject',
-          reason: rejectForm.reason
-        });
-        ElMessage.success('审核驳回成功');
+      const resourceIds = selectedResources.value.map((r) => r.resourceId);
+      const result = await batchReject(resourceIds, reasonCode, reasonDetail);
+      // 后端API使用 code: 0 表示成功
+      if ((result.code === 200 || result.code === 0) && result.data) {
+        ElMessage.success(`成功驳回 ${result.data.successCount} 个资源`);
+        if (result.data.failCount > 0) {
+          ElMessage.warning(`${result.data.failCount} 个资源驳回失败`);
+        }
       }
+      selectedResources.value = [];
+    } else if (currentRejectResource.value) {
+      await rejectResource(
+        currentRejectResource.value.resourceId,
+        reasonCode,
+        reasonDetail
+      );
+      ElMessage.success('审核驳回成功');
     }
-
     rejectDialogVisible.value = false;
     detailDialogVisible.value = false;
     loadResources();
-  } catch (error: any) {
-    ElMessage.error(error.message || '审核驳回失败');
+  } catch (error: unknown) {
+    const err = error as Error;
+    ElMessage.error(err.message || '审核驳回失败');
   } finally {
     submitting.value = false;
   }
 };
 
-/**
- * 批量通过
- */
 const handleBatchApprove = async () => {
   if (selectedResources.value.length === 0) {
     ElMessage.warning('请先选择要审核的资源');
     return;
   }
-
   try {
     await ElMessageBox.confirm(
       `确认通过选中的 ${selectedResources.value.length} 个资源的审核吗？`,
@@ -568,92 +634,60 @@ const handleBatchApprove = async () => {
         type: 'success'
       }
     );
-
     submitting.value = true;
-    await Promise.all(
-      selectedResources.value.map(resource =>
-        auditResource(resource.resource_id, {
-          action: 'approve'
-        })
-      )
-    );
-
-    ElMessage.success(`成功通过 ${selectedResources.value.length} 个资源`);
+    const resourceIds = selectedResources.value.map((r) => r.resourceId);
+    const result = await batchApprove(resourceIds);
+    // 后端API使用 code: 0 表示成功
+    if ((result.code === 200 || result.code === 0) && result.data) {
+      ElMessage.success(`成功通过 ${result.data.successCount} 个资源`);
+      if (result.data.failCount > 0) {
+        ElMessage.warning(`${result.data.failCount} 个资源审核失败`);
+      }
+    }
     selectedResources.value = [];
     loadResources();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '批量审核通过失败');
+      const err = error as Error;
+      ElMessage.error(err.message || '批量审核通过失败');
     }
   } finally {
     submitting.value = false;
   }
 };
 
-/**
- * 批量驳回
- */
 const handleBatchReject = () => {
   if (selectedResources.value.length === 0) {
     ElMessage.warning('请先选择要驳回的资源');
     return;
   }
-
   isBatchReject.value = true;
+  rejectForm.reasonCode = '';
   rejectForm.reason = '';
   rejectDialogVisible.value = true;
 };
 
-/**
- * 获取预览图片列表
- */
-const getPreviewImages = (resource: AuditResource): string[] => {
-  const images: string[] = [];
-  
-  // 添加封面图
-  if (resource.cover) {
-    images.push(resource.cover);
-  }
-  
-  // 添加预览图数组
-  if (resource.preview_images && Array.isArray(resource.preview_images)) {
-    images.push(...resource.preview_images);
-  }
-  
-  return images;
-};
-
-/**
- * 格式化文件大小
- */
 const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  return (Math.round((bytes / Math.pow(k, i)) * 100) / 100) + ' ' + sizes[i];
 };
 
-/**
- * 格式化日期
- */
 const formatDate = (date: string): string => {
   if (!date) return '-';
   const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hour = String(d.getHours()).padStart(2, '0');
-  const minute = String(d.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour}:${minute}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-// 初始化
 onMounted(() => {
   loadResources();
   loadCategories();
+  loadRejectReasons();
 });
 </script>
+
 
 <style scoped lang="scss">
 .audit-page {
@@ -668,14 +702,6 @@ onMounted(() => {
       font-weight: 600;
       color: #333;
       margin: 0;
-    }
-
-    .page-actions {
-      .badge {
-        :deep(.el-badge__content) {
-          background: #ff7d00;
-        }
-      }
     }
   }
 
@@ -750,10 +776,6 @@ onMounted(() => {
           font-weight: 500;
           color: #333;
           line-height: 1.5;
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;
-          overflow: hidden;
         }
 
         .resource-meta {
@@ -817,17 +839,6 @@ onMounted(() => {
           height: 150px;
           border-radius: 4px;
           cursor: pointer;
-
-          .image-error {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f5f7fa;
-            color: #c0c4cc;
-            font-size: 32px;
-          }
         }
       }
 
@@ -835,49 +846,6 @@ onMounted(() => {
         display: flex;
         gap: 16px;
         justify-content: center;
-      }
-    }
-  }
-}
-
-// 暗黑模式
-:global(.dark) {
-  .audit-page {
-    .page-header {
-      .page-title {
-        color: #e0e0e0;
-      }
-    }
-
-    .batch-actions-card {
-      background: #1e3a5f;
-      border-color: #2a5a8f;
-
-      .selected-count {
-        color: #4a9eff;
-      }
-    }
-
-    .resource-info {
-      .resource-details {
-        .resource-title {
-          color: #e0e0e0;
-        }
-      }
-    }
-
-    .uploader-info {
-      .uploader-name {
-        color: #e0e0e0;
-      }
-    }
-
-    .resource-detail {
-      .detail-section {
-        .section-title {
-          color: #e0e0e0;
-          border-color: #4a9eff;
-        }
       }
     }
   }

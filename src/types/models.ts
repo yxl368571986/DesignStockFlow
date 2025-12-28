@@ -30,6 +30,7 @@ export interface ResourceInfo {
   fileFormat?: string; // 文件格式（兼容字段）
   fileSize: number; // 文件大小（字节）
   fileUrl?: string; // 文件下载URL
+  fileName?: string; // 文件名
   downloadCount: number; // 下载次数
   viewCount?: number; // 浏览次数
   likeCount?: number; // 点赞次数

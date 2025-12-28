@@ -115,6 +115,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('@/views/Notifications/index.vue'),
+    meta: {
+      title: '消息通知 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/Auth/Login.vue'),
@@ -215,6 +224,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Admin/Audit/index.vue'),
         meta: {
           title: '内容审核 - 管理后台'
+        }
+      },
+      {
+        path: 'audit/logs',
+        name: 'AdminAuditLogs',
+        component: () => import('@/views/Admin/Audit/Logs.vue'),
+        meta: {
+          title: '审核日志 - 管理后台'
         }
       },
       {

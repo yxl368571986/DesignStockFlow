@@ -22,7 +22,12 @@ export class AuthController {
 
       // 验证必填字段
       if (!data.phone || !data.verify_code || !data.password) {
-        error(res, '手机号、验证码和密码不能为空', 400);
+        res.status(400).json({
+          code: 400,
+          msg: '手机号、验证码和密码不能为空',
+          data: null,
+          errorCode: 'INVALID_PARAMS'
+        });
         return;
       }
 
@@ -33,7 +38,14 @@ export class AuthController {
     } catch (err: unknown) {
       logger.error('注册失败:', err);
       const message = err instanceof Error ? err.message : '注册失败';
-      error(res, message, 400);
+      const errorCode = (err as Error & { code?: string })?.code || 'REGISTER_FAILED';
+      
+      res.status(400).json({
+        code: 400,
+        msg: message,
+        data: null,
+        errorCode
+      });
     }
   }
 
@@ -79,7 +91,12 @@ export class AuthController {
       const { phone, verify_code } = req.body;
 
       if (!phone || !verify_code) {
-        error(res, '手机号和验证码不能为空', 400);
+        res.status(400).json({
+          code: 400,
+          msg: '手机号和验证码不能为空',
+          data: null,
+          errorCode: 'INVALID_PARAMS'
+        });
         return;
       }
 
@@ -89,7 +106,14 @@ export class AuthController {
     } catch (err: unknown) {
       logger.error('验证码登录失败:', err);
       const message = err instanceof Error ? err.message : '登录失败';
-      error(res, message, 401);
+      const errorCode = (err as Error & { code?: string })?.code || 'LOGIN_FAILED';
+      
+      res.status(401).json({
+        code: 401,
+        msg: message,
+        data: null,
+        errorCode
+      });
     }
   }
 
@@ -102,18 +126,57 @@ export class AuthController {
       const data: SendCodeRequest = req.body;
 
       if (!data.phone) {
-        error(res, '手机号不能为空', 400);
+        res.status(400).json({
+          code: 400,
+          msg: '手机号不能为空',
+          data: null,
+          errorCode: 'SMS_001'
+        });
         return;
       }
 
-      await authService.sendVerifyCode(data);
+      // 获取客户端IP
+      const ip = this.getClientIp(req);
+
+      // 调用服务发送验证码
+      await authService.sendVerifyCode(data, ip);
 
       success(res, null, '验证码发送成功');
     } catch (err: unknown) {
       logger.error('发送验证码失败:', err);
       const message = err instanceof Error ? err.message : '发送验证码失败';
-      error(res, message, 400);
+      const errorCode = (err as Error & { code?: string })?.code || 'SMS_004';
+      const retryAfter = (err as Error & { retryAfter?: number })?.retryAfter;
+      
+      // 根据错误码确定HTTP状态码
+      const statusCode = errorCode === 'SMS_002' || errorCode === 'SMS_003' || errorCode === 'SMS_008' ? 429 : 400;
+      
+      res.status(statusCode).json({
+        code: statusCode,
+        msg: message,
+        data: retryAfter ? { retryAfter } : null,
+        errorCode
+      });
     }
+  }
+
+  /**
+   * 获取客户端IP地址
+   */
+  private getClientIp(req: Request): string {
+    // 优先从代理头获取
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+      return ips.split(',')[0].trim();
+    }
+    
+    const realIp = req.headers['x-real-ip'];
+    if (realIp) {
+      return Array.isArray(realIp) ? realIp[0] : realIp;
+    }
+    
+    return req.ip || req.socket.remoteAddress || '127.0.0.1';
   }
 
   /**
@@ -163,7 +226,12 @@ export class AuthController {
       const { phone, verify_code, new_password } = req.body;
 
       if (!phone || !verify_code || !new_password) {
-        error(res, '手机号、验证码和新密码不能为空', 400);
+        res.status(400).json({
+          code: 400,
+          msg: '手机号、验证码和新密码不能为空',
+          data: null,
+          errorCode: 'INVALID_PARAMS'
+        });
         return;
       }
 
@@ -173,7 +241,14 @@ export class AuthController {
     } catch (err: unknown) {
       logger.error('重置密码失败:', err);
       const message = err instanceof Error ? err.message : '重置密码失败';
-      error(res, message, 400);
+      const errorCode = (err as Error & { code?: string })?.code || 'RESET_PASSWORD_FAILED';
+      
+      res.status(400).json({
+        code: 400,
+        msg: message,
+        data: null,
+        errorCode
+      });
     }
   }
 

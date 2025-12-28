@@ -14,17 +14,44 @@ if (!fs.existsSync(uploadDir)) {
   logger.info(`创建上传目录: ${uploadDir}`);
 }
 
+/**
+ * 生成不冲突的文件名
+ * 保留原始文件名，如果存在同名文件则添加序号 (1), (2) 等
+ */
+function getUniqueFilename(dir: string, originalName: string): string {
+  // 解码文件名（处理中文等特殊字符，multer 使用 latin1 编码）
+  let decodedName: string;
+  try {
+    decodedName = Buffer.from(originalName, 'latin1').toString('utf8');
+  } catch {
+    decodedName = originalName;
+  }
+  
+  const ext = path.extname(decodedName);
+  const basename = path.basename(decodedName, ext);
+  
+  let filename = decodedName;
+  let counter = 1;
+  
+  // 检查文件是否存在，如果存在则添加序号
+  while (fs.existsSync(path.join(dir, filename))) {
+    filename = `${basename}(${counter})${ext}`;
+    counter++;
+  }
+  
+  return filename;
+}
+
 // 配置存储
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // 生成唯一文件名：时间戳-随机数-原始文件名
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext);
-    cb(null, `${basename}-${uniqueSuffix}${ext}`);
+    // 保留原始文件名，如果冲突则添加序号
+    const uniqueFilename = getUniqueFilename(uploadDir, file.originalname);
+    logger.info(`文件上传: 原始名称 "${file.originalname}" -> 保存为 "${uniqueFilename}"`);
+    cb(null, uniqueFilename);
   },
 });
 

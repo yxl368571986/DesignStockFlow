@@ -291,15 +291,6 @@ function clearFiles() {
 }
 
 /**
- * 点击上传区域
- */
-function handleClickUploadArea() {
-  if (!props.disabled && canAddMore.value) {
-    fileInputRef.value?.click();
-  }
-}
-
-/**
  * 获取文件状态图标
  */
 function getStatusIcon(status: FileStatus) {
@@ -382,15 +373,15 @@ defineExpose({
 
 <template>
   <div class="upload-area">
-    <!-- 拖拽上传区域 -->
-    <div
+    <!-- 拖拽上传区域 - 使用 label 包裹以支持点击触发文件选择 -->
+    <label
+      for="file-upload-input"
       class="upload-dragger"
       :class="{
         'is-dragover': isDragOver,
         'is-disabled': disabled,
         'has-files': hasFiles
       }"
-      @click="handleClickUploadArea"
       @dragenter="handleDragEnter"
       @dragover="handleDragOver"
       @dragleave="handleDragLeave"
@@ -423,15 +414,16 @@ defineExpose({
 
       <!-- 隐藏的文件输入框 -->
       <input
+        id="file-upload-input"
         ref="fileInputRef"
         type="file"
         :multiple="multiple"
         :accept="SUPPORTED_FORMATS.map((f) => `.${f.toLowerCase()}`).join(',')"
-        :disabled="disabled"
+        :disabled="disabled || !canAddMore"
         class="upload-input"
         @change="handleFileSelect"
       >
-    </div>
+    </label>
 
     <!-- 文件列表 -->
     <div
@@ -545,8 +537,9 @@ defineExpose({
   width: 100%;
 }
 
-/* 拖拽上传区域 */
+/* 拖拽上传区域 - label 元素需要设置为 block */
 .upload-dragger {
+  display: block;
   position: relative;
   width: 100%;
   padding: 40px 20px;
@@ -556,6 +549,7 @@ defineExpose({
   cursor: pointer;
   transition: all 0.3s ease;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .upload-dragger:hover {
@@ -621,9 +615,18 @@ defineExpose({
   line-height: 1.5;
 }
 
-/* 隐藏的文件输入框 */
+/* 隐藏的文件输入框 - 使用视觉隐藏而不是 display:none */
+/* 这样可以确保在所有浏览器中都能通过 label 的 for 属性触发文件选择对话框 */
 .upload-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* 文件列表 */

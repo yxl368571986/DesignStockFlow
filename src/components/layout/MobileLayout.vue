@@ -27,6 +27,7 @@ import {
 } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
+import NotificationBell from '@/components/business/NotificationBell.vue';
 
 /**
  * 移动端布局组件
@@ -301,16 +302,21 @@ onBeforeUnmount(() => {
           <span class="logo-text">星潮</span>
         </div>
 
-        <!-- 搜索按钮 -->
-        <button
-          class="icon-btn"
-          aria-label="搜索"
-          @click="openSearch"
-        >
-          <el-icon :size="24">
-            <SearchIcon />
-          </el-icon>
-        </button>
+        <!-- 右侧操作区 -->
+        <div class="header-right">
+          <!-- 通知铃铛（仅登录后显示） -->
+          <NotificationBell v-if="isLoggedIn" />
+          <!-- 搜索按钮 -->
+          <button
+            class="icon-btn"
+            aria-label="搜索"
+            @click="openSearch"
+          >
+            <el-icon :size="24">
+              <SearchIcon />
+            </el-icon>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -652,6 +658,13 @@ onBeforeUnmount(() => {
 
 .icon-btn:active {
   background-color: #f5f7fa;
+}
+
+/* 头部右侧区域 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Logo */

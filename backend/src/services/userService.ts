@@ -143,6 +143,7 @@ export class UserService {
             resource_id: true,
             title: true,
             cover: true,
+            file_format: true,
             file_size: true,
             download_count: true,
             vip_level: true,
@@ -160,27 +161,14 @@ export class UserService {
       take: pageSize,
     });
 
-    // 格式化返回数据
+    // 格式化返回数据，匹配前端 DownloadRecord 类型
     const list = records.map((record) => ({
-      downloadId: record.download_id,
+      recordId: record.download_id,
       resourceId: record.resource_id,
-      downloadedAt: record.created_at,
-      resource: record.resources
-        ? {
-            resourceId: record.resources.resource_id,
-            title: record.resources.title,
-            coverImage: record.resources.cover,
-            fileSize: record.resources.file_size?.toString() || '0', // 将BigInt转换为字符串
-            downloadCount: record.resources.download_count,
-            vipLevel: record.resources.vip_level,
-            category: record.resources.categories
-              ? {
-                  categoryId: record.resources.categories.category_id,
-                  name: record.resources.categories.category_name,
-                }
-              : null,
-          }
-        : null,
+      resourceTitle: record.resources?.title || '未知资源',
+      resourceCover: record.resources?.cover || '',
+      resourceFormat: record.resources?.file_format?.split('/').pop()?.toUpperCase() || 'FILE',
+      downloadTime: record.created_at?.toISOString() || '',
     }));
 
     return {
@@ -219,17 +207,22 @@ export class UserService {
       take: pageSize,
     });
 
-    // 格式化返回数据
+    // 格式化返回数据，匹配前端 UploadRecord 类型
     const list = records.map((record) => ({
+      recordId: record.resource_id, // 使用 resourceId 作为 recordId
       resourceId: record.resource_id,
-      title: record.title,
-      coverImage: record.cover,
-      fileSize: record.file_size,
+      resourceTitle: record.title,
+      resourceCover: record.cover || '',
+      resourceFormat: record.file_format?.split('/').pop()?.toUpperCase() || 'FILE',
+      fileSize: Number(record.file_size), // BigInt 转 Number
       downloadCount: record.download_count,
       viewCount: record.view_count,
       vipLevel: record.vip_level,
       status: record.status,
+      isAudit: record.audit_status, // 0-待审核, 1-已通过, 2-已驳回
       auditStatus: record.audit_status,
+      auditMsg: record.audit_msg || record.reject_reason || '', // 从资源表获取驳回原因
+      uploadTime: record.created_at?.toISOString() || '',
       createdAt: record.created_at,
       category: record.categories
         ? {

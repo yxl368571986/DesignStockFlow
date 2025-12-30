@@ -142,12 +142,9 @@ export async function getPublicBanners() {
  */
 export async function getPublicCategories(parentId?: string) {
   try {
-    const where: any = {};
-    if (parentId) {
-      where.parent_id = parentId;
-    } else {
-      where.parent_id = null;
-    }
+    const where: { parent_id: string | null } = parentId 
+      ? { parent_id: parentId }
+      : { parent_id: null };
 
     const categories = await prisma.categories.findMany({
       where,
@@ -231,7 +228,17 @@ export async function getCategoryTree() {
 export async function getPublicAnnouncements(level?: string) {
   try {
     const now = new Date();
-    const where: any = {
+    
+    interface WhereCondition {
+      status: number;
+      type?: string;
+      OR: Array<{
+        start_time?: { lte?: Date } | null;
+        end_time?: { gte?: Date } | null;
+      }>;
+    }
+    
+    const where: WhereCondition = {
       status: 1,
       OR: [
         { start_time: null, end_time: null },
@@ -259,7 +266,7 @@ export async function getPublicAnnouncements(level?: string) {
       title: ann.title,
       content: ann.content,
       type: ann.type as 'normal' | 'warning' | 'important',
-      level: ann.type as 'normal' | 'important',
+      level: ann.type as 'normal' | 'warning' | 'important',  // 修复：level应该与type一致
       linkUrl: ann.link_url,
       isTop: ann.is_top,
       status: ann.status,

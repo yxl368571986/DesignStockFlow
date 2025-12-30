@@ -428,6 +428,7 @@ import {
   type RejectReason
 } from '@/api/audit';
 import { getCategories } from '@/api/content';
+import { formatFileSize, formatTime } from '@/utils/format';
 import type { Category } from '@/types/models';
 import { getFullImageUrl } from '@/utils/url';
 
@@ -667,18 +668,9 @@ const handleBatchReject = () => {
   rejectDialogVisible.value = true;
 };
 
-const formatFileSize = (bytes: number): string => {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return (Math.round((bytes / Math.pow(k, i)) * 100) / 100) + ' ' + sizes[i];
-};
-
 const formatDate = (date: string): string => {
   if (!date) return '-';
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return formatTime(date, 'YYYY-MM-DD HH:mm');
 };
 
 onMounted(() => {

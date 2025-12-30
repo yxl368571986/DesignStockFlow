@@ -50,6 +50,11 @@ withDefaults(defineProps<Props>(), {
   border-radius: 50%;
   padding: 2px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* 确保宽高相等，形成圆形而非椭圆 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
 }
 
 /* 位置变体 */

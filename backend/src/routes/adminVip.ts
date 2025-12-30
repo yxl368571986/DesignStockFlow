@@ -11,6 +11,9 @@ import {
   getSecurityLogs,
   unlockUserPayment,
   getVipOrderStatistics,
+  getRefundStatistics,
+  getPaymentChannelDistribution,
+  getAbnormalOrderStatistics,
 } from '@/controllers/adminVipController.js';
 
 const router = Router();
@@ -30,11 +33,32 @@ router.use(authenticate);
 router.get('/refunds', requirePermissions(['vip:refund']), getRefundList);
 
 /**
+ * @route   GET /api/v1/admin/vip/refunds/statistics
+ * @desc    获取退款统计
+ * @access  Private (需要vip:view权限)
+ */
+router.get('/refunds/statistics', requirePermissions(['vip:view']), getRefundStatistics);
+
+/**
  * @route   PUT /api/v1/admin/vip/refunds/:refundId
  * @desc    处理退款申请（审批/拒绝）
  * @access  Private (需要vip:refund权限)
  */
 router.put('/refunds/:refundId', requirePermissions(['vip:refund']), processRefund);
+
+/**
+ * @route   GET /api/v1/admin/vip/payment-channels
+ * @desc    获取支付渠道分布
+ * @access  Private (需要vip:view权限)
+ */
+router.get('/payment-channels', requirePermissions(['vip:view']), getPaymentChannelDistribution);
+
+/**
+ * @route   GET /api/v1/admin/vip/abnormal-orders
+ * @desc    获取异常订单统计
+ * @access  Private (需要vip:view权限)
+ */
+router.get('/abnormal-orders', requirePermissions(['vip:view']), getAbnormalOrderStatistics);
 
 /**
  * @route   GET /api/v1/admin/vip/order-statistics

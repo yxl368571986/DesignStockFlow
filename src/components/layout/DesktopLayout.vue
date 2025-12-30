@@ -13,10 +13,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { useRouter } from 'vue-router';
-import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
+import { useRouter, useRoute } from 'vue-router';
+import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight, ShoppingCart } from '@element-plus/icons-vue';
 import SearchBar from '@/components/business/SearchBar.vue';
 import NotificationBell from '@/components/business/NotificationBell.vue';
+import VipBadge from '@/components/business/VipBadge.vue';
 import { useUserStore } from '@/pinia/userStore';
 import { useConfigStore } from '@/pinia/configStore';
 
@@ -25,6 +26,7 @@ import { useConfigStore } from '@/pinia/configStore';
  */
 
 const router = useRouter();
+const route = useRoute();
 const userStore = useUserStore();
 const configStore = useConfigStore();
 
@@ -32,6 +34,12 @@ const configStore = useConfigStore();
 const isHeaderFixed = ref(false); // 导航栏是否固定
 const showUserMenu = ref(false); // 是否显示用户菜单
 const sidebarCollapsed = ref(false); // 侧边栏是否折叠
+
+// 计算属性：是否显示侧边栏（仅搜索页面不显示）
+const showSidebar = computed(() => {
+  // 只有在 /search 路径时隐藏侧边栏
+  return !route.path.startsWith('/search');
+});
 
 // 计算属性
 const isLoggedIn = computed(() => userStore.isLoggedIn);
@@ -43,6 +51,14 @@ const pointsBalance = computed(() => userStore.pointsBalance);
 const siteConfig = computed(() => configStore.siteConfig);
 const primaryCategories = computed(() => configStore.primaryCategories);
 const hotCategories = computed(() => configStore.hotCategories);
+
+// VIP状态计算
+const vipStatus = computed(() => {
+  if (!isVIP.value) return 'none';
+  const vipLevel = userInfo.value?.vipLevel || 0;
+  if (vipLevel >= 3) return 'lifetime'; // 年度VIP显示为高级
+  return 'active';
+});
 
 // 检查是否是管理员
 const isAdmin = computed(() => {
@@ -109,6 +125,13 @@ function goToVIP() {
  */
 function goToPoints() {
   router.push('/points');
+}
+
+/**
+ * 跳转到积分商城
+ */
+function goToPointsMall() {
+  router.push('/points/mall');
 }
 
 /**
@@ -278,13 +301,15 @@ onBeforeUnmount(() => {
                 @visible-change="(visible: boolean) => (showUserMenu = visible)"
               >
                 <div class="user-info">
-                  <el-avatar
-                    :src="userInfo?.avatar"
-                    :size="36"
-                    class="user-avatar"
-                  >
-                    <el-icon><User /></el-icon>
-                  </el-avatar>
+                  <VipBadge :status="vipStatus" position="bottom-right" size="small">
+                    <el-avatar
+                      :src="userInfo?.avatar"
+                      :size="36"
+                      class="user-avatar"
+                    >
+                      <el-icon><User /></el-icon>
+                    </el-avatar>
+                  </VipBadge>
                   <span class="user-name">{{ displayName }}</span>
                   <span
                     v-if="isVIP"
@@ -309,6 +334,10 @@ onBeforeUnmount(() => {
                     <el-dropdown-item @click="goToPoints">
                       <el-icon><Coin /></el-icon>
                       我的积分
+                    </el-dropdown-item>
+                    <el-dropdown-item @click="goToPointsMall">
+                      <el-icon><ShoppingCart /></el-icon>
+                      积分商城
                     </el-dropdown-item>
                     <el-dropdown-item @click="goToVIP">
                       <el-icon><Download /></el-icon>
@@ -345,8 +374,9 @@ onBeforeUnmount(() => {
 
     <!-- 主体内容 -->
     <div class="main-wrapper">
-      <!-- 侧边栏 -->
+      <!-- 侧边栏（搜索页面不显示） -->
       <aside
+        v-if="showSidebar"
         class="sidebar"
         :class="{ 'sidebar-collapsed': sidebarCollapsed }"
       >
@@ -445,6 +475,15 @@ onBeforeUnmount(() => {
               >
                 <el-icon><User /></el-icon>
                 <span>个人中心</span>
+              </li>
+              <!-- 积分商城 - 仅登录后显示 -->
+              <li
+                v-if="isLoggedIn"
+                class="quick-link-item"
+                @click="goToPointsMall"
+              >
+                <el-icon><ShoppingCart /></el-icon>
+                <span>积分商城</span>
               </li>
               <li
                 class="quick-link-item"

@@ -115,6 +115,42 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/points/recharge',
+    name: 'PointsRecharge',
+    component: () => import('@/views/Points/Recharge.vue'),
+    meta: {
+      title: '积分充值 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/points/mall',
+    name: 'PointsMall',
+    component: () => import('@/views/Points/Mall.vue'),
+    meta: {
+      title: '积分商城 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/points/mall/:id',
+    name: 'PointsProductDetail',
+    component: () => import('@/views/Points/ProductDetail.vue'),
+    meta: {
+      title: '商品详情 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/points/exchanges',
+    name: 'PointsExchanges',
+    component: () => import('@/views/Points/MyExchanges.vue'),
+    meta: {
+      title: '我的兑换记录 - 星潮设计',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/notifications',
     name: 'Notifications',
     component: () => import('@/views/Notifications/index.vue'),
@@ -341,6 +377,87 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Admin/Points/index.vue'),
         meta: {
           title: '积分管理 - 管理后台'
+        }
+      },
+      // 积分规则
+      {
+        path: 'points/rules',
+        name: 'AdminPointsRules',
+        component: () => import('@/views/Admin/Points/Rules.vue'),
+        meta: {
+          title: '积分规则 - 管理后台'
+        }
+      },
+      // 商城商品
+      {
+        path: 'points/products',
+        name: 'AdminPointsProducts',
+        component: () => import('@/views/Admin/Points/Products.vue'),
+        meta: {
+          title: '商城商品 - 管理后台'
+        }
+      },
+      // 兑换记录
+      {
+        path: 'points/exchanges',
+        name: 'AdminPointsExchanges',
+        component: () => import('@/views/Admin/Points/Exchanges.vue'),
+        meta: {
+          title: '兑换记录 - 管理后台'
+        }
+      },
+      // 充值套餐管理
+      {
+        path: 'points/packages',
+        name: 'AdminPointsPackages',
+        component: () => import('@/views/Admin/Points/PackageManagement.vue'),
+        meta: {
+          title: '充值套餐管理 - 管理后台'
+        }
+      },
+      // 用户积分调整
+      {
+        path: 'points/adjust',
+        name: 'AdminPointsAdjust',
+        component: () => import('@/views/Admin/Points/UserPointsAdjust.vue'),
+        meta: {
+          title: '用户积分调整 - 管理后台'
+        }
+      },
+      // 批量赠送积分
+      {
+        path: 'points/batch-gift',
+        name: 'AdminPointsBatchGift',
+        component: () => import('@/views/Admin/Points/BatchGift.vue'),
+        meta: {
+          title: '批量赠送积分 - 管理后台'
+        }
+      },
+      // 充值订单管理
+      {
+        path: 'points/orders',
+        name: 'AdminPointsOrders',
+        component: () => import('@/views/Admin/Points/RechargeOrders.vue'),
+        meta: {
+          title: '充值订单管理 - 管理后台'
+        }
+      },
+      // 积分调整日志
+      {
+        path: 'points/logs',
+        name: 'AdminPointsLogs',
+        component: () => import('@/views/Admin/Points/AdjustmentLogs.vue'),
+        meta: {
+          title: '积分调整日志 - 管理后台'
+        }
+      },
+      // 积分统计
+      {
+        path: 'points/statistics',
+        name: 'AdminPointsStatistics',
+        component: () => import('@/views/Admin/Points/Statistics.vue'),
+        meta: {
+          title: '积分统计 - 管理后台'
         }
       },
       // 权限管理

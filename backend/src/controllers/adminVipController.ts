@@ -331,6 +331,185 @@ export async function unlockUserPayment(req: Request, res: Response) {
 }
 
 /**
+ * 获取退款统计
+ * GET /api/v1/admin/vip/refunds/statistics
+ */
+export async function getRefundStatistics(req: Request, res: Response) {
+  try {
+    const { startDate, endDate } = req.query;
+
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ` AND rr.created_at >= '${startDate}'`;
+    }
+    if (endDate) {
+      dateFilter += ` AND rr.created_at <= '${endDate}'`;
+    }
+
+    // 获取退款统计
+    // status: 0=待处理, 1=已批准, 2=已拒绝
+    const statsResult = await prisma.$queryRawUnsafe<Array<{
+      total_refunds: bigint;
+      pending_refunds: bigint;
+      approved_refunds: bigint;
+      rejected_refunds: bigint;
+      total_refund_amount: number | null;
+    }>>(`
+      SELECT 
+        COUNT(*) as total_refunds,
+        COUNT(CASE WHEN rr.status = 0 THEN 1 END) as pending_refunds,
+        COUNT(CASE WHEN rr.status = 1 THEN 1 END) as approved_refunds,
+        COUNT(CASE WHEN rr.status = 2 THEN 1 END) as rejected_refunds,
+        COALESCE(SUM(CASE WHEN rr.status = 1 THEN rr.refund_amount ELSE 0 END), 0) as total_refund_amount
+      FROM refund_requests rr
+      WHERE 1=1 ${dateFilter}
+    `);
+
+    const stats = statsResult[0];
+    const totalRefunds = Number(stats?.total_refunds || 0);
+
+    // 计算退款率（基于已支付订单）
+    let orderDateFilter = '';
+    if (startDate) {
+      orderDateFilter += ` AND created_at >= '${startDate}'`;
+    }
+    if (endDate) {
+      orderDateFilter += ` AND created_at <= '${endDate}'`;
+    }
+    const paidOrdersResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(`
+      SELECT COUNT(*) as count FROM orders WHERE payment_status = 1 ${orderDateFilter}
+    `);
+    const paidOrders = Number(paidOrdersResult[0]?.count || 1);
+    const refundRate = paidOrders > 0 ? ((Number(stats?.approved_refunds || 0) / paidOrders) * 100).toFixed(1) : 0;
+
+    res.json({
+      code: 200,
+      data: {
+        totalRefunds,
+        totalRefundAmount: Number(stats?.total_refund_amount || 0),
+        pendingRefunds: Number(stats?.pending_refunds || 0),
+        approvedRefunds: Number(stats?.approved_refunds || 0),
+        rejectedRefunds: Number(stats?.rejected_refunds || 0),
+        refundRate: Number(refundRate),
+      },
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('获取退款统计失败:', err);
+    res.status(500).json({ code: 500, message: err.message || '获取退款统计失败' });
+  }
+}
+
+/**
+ * 获取支付渠道分布
+ * GET /api/v1/admin/vip/payment-channels
+ */
+export async function getPaymentChannelDistribution(req: Request, res: Response) {
+  try {
+    const { startDate, endDate } = req.query;
+
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ` AND created_at >= '${startDate}'`;
+    }
+    if (endDate) {
+      dateFilter += ` AND created_at <= '${endDate}'`;
+    }
+
+    // 获取支付渠道分布
+    const channelStats = await prisma.$queryRawUnsafe<Array<{
+      payment_method: string | null;
+      count: bigint;
+      amount: number | null;
+    }>>(`
+      SELECT 
+        payment_method,
+        COUNT(*) as count,
+        COALESCE(SUM(amount), 0) as amount
+      FROM orders
+      WHERE payment_status = 1 ${dateFilter}
+      GROUP BY payment_method
+      ORDER BY count DESC
+    `);
+
+    // 映射支付渠道名称
+    const channelNameMap: Record<string, string> = {
+      'wechat': '微信支付',
+      'wechat_native': '微信支付',
+      'wechat_h5': '微信支付',
+      'alipay': '支付宝',
+      'alipay_pc': '支付宝',
+      'alipay_h5': '支付宝',
+      'points': '积分兑换',
+    };
+
+    res.json({
+      code: 200,
+      data: channelStats.map(c => ({
+        channel: channelNameMap[c.payment_method || ''] || c.payment_method || '其他',
+        count: Number(c.count),
+        amount: Number(c.amount || 0),
+      })),
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('获取支付渠道分布失败:', err);
+    res.status(500).json({ code: 500, message: err.message || '获取支付渠道分布失败' });
+  }
+}
+
+/**
+ * 获取异常订单统计
+ * GET /api/v1/admin/vip/abnormal-orders
+ */
+export async function getAbnormalOrderStatistics(req: Request, res: Response) {
+  try {
+    const { startDate, endDate } = req.query;
+
+    let dateFilter = '';
+    if (startDate) {
+      dateFilter += ` AND created_at >= '${startDate}'`;
+    }
+    if (endDate) {
+      dateFilter += ` AND created_at <= '${endDate}'`;
+    }
+
+    // 获取异常订单统计 - 使用现有字段
+    // payment_status: 0=待支付, 1=已支付, 2=支付失败, 3=已退款, 4=已取消
+    const statsResult = await prisma.$queryRawUnsafe<Array<{
+      timeout_orders: bigint;
+      failed_payments: bigint;
+      cancelled_orders: bigint;
+      refunded_orders: bigint;
+    }>>(`
+      SELECT 
+        COUNT(CASE WHEN payment_status = 4 OR (payment_status = 0 AND expire_at < NOW()) THEN 1 END) as timeout_orders,
+        COUNT(CASE WHEN payment_status = 2 THEN 1 END) as failed_payments,
+        COUNT(CASE WHEN payment_status = 4 THEN 1 END) as cancelled_orders,
+        COUNT(CASE WHEN payment_status = 3 THEN 1 END) as refunded_orders
+      FROM orders
+      WHERE 1=1 ${dateFilter}
+    `);
+
+    const stats = statsResult[0];
+
+    res.json({
+      code: 200,
+      data: {
+        timeoutOrders: Number(stats?.timeout_orders || 0),
+        failedPayments: Number(stats?.failed_payments || 0),
+        suspiciousOrders: Number(stats?.cancelled_orders || 0),  // 使用取消订单代替可疑订单
+        blockedPayments: Number(stats?.refunded_orders || 0),    // 使用退款订单代替阻止支付
+      },
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error('获取异常订单统计失败:', err);
+    res.status(500).json({ code: 500, message: err.message || '获取异常订单统计失败' });
+  }
+}
+
+/**
  * 获取VIP订单统计
  * GET /api/v1/admin/vip/order-statistics
  */

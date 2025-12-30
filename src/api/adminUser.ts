@@ -57,7 +57,41 @@ export interface UserListParams {
 export const getUserList = (
   params: UserListParams
 ): Promise<ApiResponse<PageResponse<AdminUser>>> => {
-  return get<PageResponse<AdminUser>>('/admin/users', params);
+  // 转换参数名为后端期望的格式
+  const apiParams: Record<string, unknown> = {
+    page: params.page,
+    page_size: params.pageSize
+  };
+  
+  if (params.keyword) {
+    apiParams.search = params.keyword;
+  }
+  if (params.vipLevel !== undefined) {
+    apiParams.vip_level = params.vipLevel;
+  }
+  if (params.status !== undefined) {
+    apiParams.status = params.status;
+  }
+  if (params.sortBy) {
+    apiParams.sort_by = params.sortBy;
+    apiParams.sort_order = params.sortOrder;
+  }
+  
+  return get<PageResponse<AdminUser>>('/admin/users', apiParams);
+};
+
+/**
+ * 搜索用户（用于积分调整等场景）
+ * GET /api/v1/admin/users
+ */
+export const searchUsers = (
+  params: { keyword: string; page?: number; pageSize?: number }
+): Promise<ApiResponse<PageResponse<AdminUser>>> => {
+  return get<PageResponse<AdminUser>>('/admin/users', {
+    search: params.keyword,
+    page: params.page || 1,
+    page_size: params.pageSize || 10
+  });
 };
 
 /**
@@ -101,9 +135,15 @@ export const adjustUserVip = (
   data: {
     vipLevel: number;
     expireAt: string | null;
+    reason?: string;
   }
 ): Promise<ApiResponse<void>> => {
-  return put<void>(`/admin/users/${userId}/vip`, data);
+  // 转换参数名以匹配后端API
+  return put<void>(`/admin/users/${userId}/vip`, {
+    vip_level: data.vipLevel,
+    vip_expire_at: data.expireAt,
+    reason: data.reason
+  });
 };
 
 /**
@@ -118,7 +158,12 @@ export const adjustUserPoints = (
     reason: string;
   }
 ): Promise<ApiResponse<void>> => {
-  return post<void>(`/admin/users/${userId}/points/adjust`, data);
+  // 转换参数格式以匹配后端API
+  const pointsChange = data.type === 'add' ? data.amount : -data.amount;
+  return post<void>(`/admin/users/${userId}/points/adjust`, {
+    points_change: pointsChange,
+    reason: data.reason
+  });
 };
 
 /**

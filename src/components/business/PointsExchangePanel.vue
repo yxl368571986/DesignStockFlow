@@ -1,330 +1,651 @@
+<!--
+  积分兑换面板组件
+  
+  功能：
+  - 显示可兑换权益列表
+  - 兑换确认流程
+  - 兑换规则说明
+  
+  需求: 10.1, 10.2, 10.8
+-->
+
 <script setup lang="ts">
-/**
- * 积分兑换面板组件
- * 用于积分兑换VIP会员
- */
-
 import { ref, computed, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { Close, Warning, InfoFilled } from '@element-plus/icons-vue';
-import { useVipStore } from '@/pinia/vipStore';
+import { ElMessage } from 'element-plus';
+import { Coin, Picture, InfoFilled } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
+import type { FormInstance, FormRules } from 'element-plus';
 
-interface Props {
-  /** 是否显示 */
-  visible?: boolean;
+interface ExchangeProduct {
+  productId: string;
+  productName: string;
+  productType: 'vip' | 'gift' | 'tool';
+  pointsRequired: number;
+  productValue: string;
+  stock: number;
+  imageUrl: string;
+  description: string;
 }
 
-withDefaults(defineProps<Props>(), {
-  visible: true
-});
-
 const emit = defineEmits<{
-  success: [];
-  close: [];
+  exchangeSuccess: [productId: string];
 }>();
 
-const vipStore = useVipStore();
 const userStore = useUserStore();
+const pointsBalance = computed(() => userStore.pointsBalance);
 
-/** 选择的月数 */
-const selectedMonths = ref(1);
-
-/** 兑换中 */
+const loading = ref(false);
+const products = ref<ExchangeProduct[]>([]);
+const confirmDialogVisible = ref(false);
+const selectedProduct = ref<ExchangeProduct | null>(null);
 const exchanging = ref(false);
 
-/** 用户积分 */
-const userPoints = computed(() => userStore.pointsBalance);
-
-/** 兑换信息 */
-const exchangeInfo = computed(() => vipStore.pointsExchangeInfo);
-
-/** 每月所需积分 */
-const pointsPerMonth = computed(() => exchangeInfo.value?.pointsRequired || 1000);
-
-/** 总所需积分 */
-const totalPoints = computed(() => pointsPerMonth.value * selectedMonths.value);
-
-/** 是否可以兑换 */
-const canExchange = computed(() => {
-  if (!exchangeInfo.value) return false;
-  if (exchangeInfo.value.hasExchangedThisMonth) return false;
-  if (userPoints.value < totalPoints.value) return false;
-  return true;
+const addressFormRef = ref<FormInstance>();
+const addressForm = ref({
+  address: '',
 });
 
-/** 不可兑换原因 */
-const disabledReason = computed(() => {
-  if (!exchangeInfo.value) return '加载中...';
-  if (exchangeInfo.value.hasExchangedThisMonth) return '本月已兑换过，下月再来';
-  if (userPoints.value < totalPoints.value) {
-    return `积分不足，还需${totalPoints.value - userPoints.value}积分`;
-  }
-  return '';
-});
+const addressRules: FormRules = {
+  address: [
+    { required: true, message: '请输入收货地址', trigger: 'blur' },
+    { min: 10, message: '地址至少10个字符', trigger: 'blur' },
+  ],
+};
 
-/** 月数选项 */
-const monthOptions = computed(() => {
-  const max = exchangeInfo.value?.maxMonths || 3;
-  return Array.from({ length: max }, (_, i) => ({
-    value: i + 1,
-    label: `${i + 1}个月`,
-    points: pointsPerMonth.value * (i + 1)
-  }));
-});
+/** 获取默认图片 */
+function getDefaultImage(productType: string): string {
+  const defaultImages: Record<string, string> = {
+    vip: '/images/vip-card.png',
+    gift: '/images/gift-box.png',
+    tool: '/images/tool-icon.png',
+  };
+  return defaultImages[productType] || '/images/default-product.png';
+}
 
-/** 执行兑换 */
-async function handleExchange() {
-  if (!canExchange.value) return;
-  
+/** 判断是否可以兑换 */
+function canExchange(product: ExchangeProduct): boolean {
+  return (
+    pointsBalance.value >= product.pointsRequired &&
+    (product.stock === -1 || product.stock > 0)
+  );
+}
+
+/** 获取按钮文字 */
+function getButtonText(product: ExchangeProduct): string {
+  if (product.stock === 0) return '已售罄';
+  if (pointsBalance.value < product.pointsRequired) return '积分不足';
+  return '立即兑换';
+}
+
+/** 处理兑换点击 */
+function handleExchange(product: ExchangeProduct) {
+  selectedProduct.value = product;
+  addressForm.value.address = '';
+  confirmDialogVisible.value = true;
+}
+
+/** 刷新用户积分信息 */
+async function refreshUserPoints() {
   try {
-    await ElMessageBox.confirm(
-      `确定使用 ${totalPoints.value} 积分兑换 ${selectedMonths.value} 个月VIP会员吗？`,
-      '确认兑换',
-      {
-        confirmButtonText: '确定兑换',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
-    
-    exchanging.value = true;
-    const success = await vipStore.exchangePointsForVip(selectedMonths.value);
-    
-    if (success) {
-      ElMessage.success('兑换成功！VIP会员已开通');
-      emit('success');
-    } else {
-      ElMessage.error('兑换失败，请稍后重试');
+    const response = await fetch('/api/v1/user/info', {
+      headers: {
+        Authorization: `Bearer ${userStore.token}`,
+      },
+    });
+    const result = await response.json();
+    if (result.code === 0 || result.code === 200) {
+      userStore.updateUserInfo({
+        pointsBalance: result.data?.pointsBalance || 0,
+        pointsTotal: result.data?.pointsTotal || 0,
+      });
     }
   } catch (error) {
-    // 用户取消
-    if (error !== 'cancel') {
-      ElMessage.error('兑换失败，请稍后重试');
+    console.error('刷新用户信息失败:', error);
+  }
+}
+
+/** 确认兑换 */
+async function confirmExchange() {
+  if (!selectedProduct.value) return;
+
+  if (selectedProduct.value.productType === 'gift') {
+    const valid = await addressFormRef.value?.validate().catch(() => false);
+    if (!valid) return;
+  }
+
+  exchanging.value = true;
+  try {
+    const response = await fetch('/api/v1/points/exchange', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userStore.token}`,
+      },
+      body: JSON.stringify({
+        productId: selectedProduct.value.productId,
+        deliveryAddress:
+          selectedProduct.value.productType === 'gift'
+            ? addressForm.value.address
+            : undefined,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.code === 0 || result.code === 200) {
+      ElMessage.success('兑换成功！');
+      confirmDialogVisible.value = false;
+      await refreshUserPoints();
+      await fetchProducts();
+      emit('exchangeSuccess', selectedProduct.value.productId);
+    } else {
+      ElMessage.error(result.message || '兑换失败');
     }
+  } catch (error) {
+    console.error('兑换失败:', error);
+    ElMessage.error('兑换失败，请稍后重试');
   } finally {
     exchanging.value = false;
   }
 }
 
-// 加载兑换信息
+/** 获取商品列表 */
+async function fetchProducts() {
+  loading.value = true;
+  try {
+    const response = await fetch('/api/v1/points/exchange/products', {
+      headers: {
+        Authorization: `Bearer ${userStore.token}`,
+      },
+    });
+
+    const result = await response.json();
+
+    if (result.code === 0 || result.code === 200) {
+      products.value = result.data?.list || [];
+    }
+  } catch (error) {
+    console.error('获取商品列表失败:', error);
+    products.value = [
+      {
+        productId: 'vip-month',
+        productName: 'VIP月卡',
+        productType: 'vip',
+        pointsRequired: 500,
+        productValue: '1个月VIP会员',
+        stock: -1,
+        imageUrl: '',
+        description: '兑换后立即生效，享受VIP专属特权',
+      },
+      {
+        productId: 'vip-quarter',
+        productName: 'VIP季卡',
+        productType: 'vip',
+        pointsRequired: 1200,
+        productValue: '3个月VIP会员',
+        stock: -1,
+        imageUrl: '',
+        description: '超值季卡，比月卡更划算',
+      },
+      {
+        productId: 'vip-year',
+        productName: 'VIP年卡',
+        productType: 'vip',
+        pointsRequired: 4000,
+        productValue: '12个月VIP会员',
+        stock: -1,
+        imageUrl: '',
+        description: '年度会员，尊享全年特权',
+      },
+    ];
+  } finally {
+    loading.value = false;
+  }
+}
+
+/** 关闭弹窗 */
+function closeDialog() {
+  confirmDialogVisible.value = false;
+}
+
 onMounted(() => {
-  vipStore.fetchPointsExchangeInfo();
+  fetchProducts();
 });
 </script>
 
 <template>
-  <div v-if="visible" class="points-exchange-panel">
-    <div class="panel-header">
-      <h3 class="panel-title">积分兑换VIP</h3>
-      <el-button text @click="emit('close')">
-        <el-icon><Close /></el-icon>
-      </el-button>
-    </div>
-    
-    <div class="panel-content">
-      <!-- 积分余额 -->
-      <div class="points-balance">
-        <span class="balance-label">当前积分</span>
-        <span class="balance-value">{{ userPoints }}</span>
+  <div class="points-exchange-panel">
+    <div class="exchange-header">
+      <h3>积分兑换</h3>
+      <div class="balance-info">
+        <el-icon><Coin /></el-icon>
+        <span class="balance-value">{{ pointsBalance }}</span>
+        <span class="balance-label">可用积分</span>
       </div>
-      
-      <!-- 兑换时长选择 -->
-      <div class="exchange-options">
-        <div class="options-label">选择兑换时长</div>
-        <div class="options-list">
-          <div
-            v-for="option in monthOptions"
-            :key="option.value"
-            class="option-item"
-            :class="{ active: selectedMonths === option.value }"
-            @click="selectedMonths = option.value"
+    </div>
+
+    <div
+      v-loading="loading"
+      class="product-list"
+    >
+      <div
+        v-for="product in products"
+        :key="product.productId"
+        class="product-card"
+        :class="{ 'out-of-stock': product.stock === 0 }"
+      >
+        <div class="product-image">
+          <el-image
+            :src="product.imageUrl || getDefaultImage(product.productType)"
+            fit="cover"
           >
-            <span class="option-label">{{ option.label }}</span>
-            <span class="option-points">{{ option.points }}积分</span>
+            <template #error>
+              <div class="image-placeholder">
+                <el-icon><Picture /></el-icon>
+              </div>
+            </template>
+          </el-image>
+          <el-tag
+            v-if="product.stock === 0"
+            type="info"
+            class="stock-tag"
+          >
+            已售罄
+          </el-tag>
+          <el-tag
+            v-else-if="product.stock > 0 && product.stock <= 10"
+            type="warning"
+            class="stock-tag"
+          >
+            仅剩{{ product.stock }}件
+          </el-tag>
+        </div>
+        <div class="product-info">
+          <h4 class="product-name">
+            {{ product.productName }}
+          </h4>
+          <p class="product-desc">
+            {{ product.description }}
+          </p>
+          <div class="product-footer">
+            <span class="points-required">
+              <el-icon><Coin /></el-icon>
+              {{ product.pointsRequired }}积分
+            </span>
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="!canExchange(product)"
+              @click="handleExchange(product)"
+            >
+              {{ getButtonText(product) }}
+            </el-button>
           </div>
         </div>
       </div>
-      
-      <!-- 兑换信息 -->
-      <div class="exchange-info">
-        <div class="info-row">
-          <span>消耗积分</span>
-          <span class="info-value">{{ totalPoints }}</span>
-        </div>
-        <div class="info-row">
-          <span>获得VIP</span>
-          <span class="info-value">{{ selectedMonths }}个月</span>
-        </div>
-        <div class="info-row">
-          <span>剩余积分</span>
-          <span class="info-value">{{ Math.max(0, userPoints - totalPoints) }}</span>
-        </div>
-      </div>
-      
-      <!-- 提示信息 -->
-      <div v-if="disabledReason" class="exchange-tip warning">
-        <el-icon><Warning /></el-icon>
-        <span>{{ disabledReason }}</span>
-      </div>
-      
-      <div v-else class="exchange-tip">
-        <el-icon><InfoFilled /></el-icon>
-        <span>每月限兑换一次，兑换后立即生效</span>
-      </div>
-      
-      <!-- 兑换按钮 -->
-      <el-button
-        type="primary"
-        size="large"
-        :disabled="!canExchange"
-        :loading="exchanging"
-        class="exchange-button"
-        @click="handleExchange"
-      >
-        {{ exchanging ? '兑换中...' : '立即兑换' }}
-      </el-button>
+
+      <el-empty
+        v-if="!loading && products.length === 0"
+        description="暂无可兑换商品"
+      />
     </div>
+
+    <div class="exchange-rules">
+      <h4>
+        <el-icon><InfoFilled /></el-icon>
+        兑换规则
+      </h4>
+      <ul>
+        <li>积分有效期为获取后12个月，请及时使用</li>
+        <li>兑换VIP会员即时生效，有效期自动叠加</li>
+        <li>实物礼品需填写收货地址，7个工作日内发货</li>
+        <li>兑换失败将自动退回积分</li>
+        <li>如有疑问请联系客服</li>
+      </ul>
+    </div>
+
+    <el-dialog
+      v-model="confirmDialogVisible"
+      title="确认兑换"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div
+        v-if="selectedProduct"
+        class="confirm-content"
+      >
+        <div class="confirm-product">
+          <el-image
+            :src="selectedProduct.imageUrl || getDefaultImage(selectedProduct.productType)"
+            fit="cover"
+            class="confirm-image"
+          />
+          <div class="confirm-info">
+            <h4>
+              {{ selectedProduct.productName }}
+            </h4>
+            <p class="confirm-points">
+              <el-icon><Coin /></el-icon>
+              {{ selectedProduct.pointsRequired }}积分
+            </p>
+          </div>
+        </div>
+
+        <el-form
+          v-if="selectedProduct.productType === 'gift'"
+          ref="addressFormRef"
+          :model="addressForm"
+          :rules="addressRules"
+          class="address-form"
+        >
+          <el-form-item
+            label="收货地址"
+            prop="address"
+          >
+            <el-input
+              v-model="addressForm.address"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入详细收货地址"
+            />
+          </el-form-item>
+        </el-form>
+
+        <div class="confirm-summary">
+          <p>
+            <span>当前积分</span>
+            <span class="value">{{ pointsBalance }}</span>
+          </p>
+          <p>
+            <span>消耗积分</span>
+            <span class="value cost">-{{ selectedProduct.pointsRequired }}</span>
+          </p>
+          <p class="total">
+            <span>兑换后积分</span>
+            <span class="value">{{ pointsBalance - selectedProduct.pointsRequired }}</span>
+          </p>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="closeDialog">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="exchanging"
+          @click="confirmExchange"
+        >
+          确认兑换
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
-
-
-<style scoped>
+<style scoped lang="scss">
 .points-exchange-panel {
+  padding: 20px;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.exchange-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .balance-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    border-radius: 20px;
+
+    .el-icon {
+      color: #fbbf24;
+      font-size: 20px;
+    }
+
+    .balance-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f59e0b;
+    }
+
+    .balance-label {
+      font-size: 14px;
+      color: #666;
+    }
+  }
+}
+
+.product-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+  min-height: 200px;
+}
+
+.product-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
   overflow: hidden;
+  transition: all 0.3s;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+
+  &.out-of-stock {
+    opacity: 0.6;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+
+  .product-image {
+    position: relative;
+    height: 160px;
+
+    .el-image {
+      width: 100%;
+      height: 100%;
+    }
+
+    .image-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f7fa;
+
+      .el-icon {
+        font-size: 48px;
+        color: #c0c4cc;
+      }
+    }
+
+    .stock-tag {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+    }
+  }
+
+  .product-info {
+    padding: 16px;
+
+    .product-name {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .product-desc {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      color: #999;
+      line-height: 1.5;
+    }
+
+    .product-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .points-required {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #f59e0b;
+
+        .el-icon {
+          font-size: 18px;
+        }
+      }
+    }
+  }
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #E4E7ED;
-}
-
-.panel-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-.panel-content {
-  padding: 20px;
-}
-
-.points-balance {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.exchange-rules {
   padding: 16px;
-  background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%);
+  background: #f5f7fa;
   border-radius: 8px;
-  margin-bottom: 20px;
+
+  h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+
+    .el-icon {
+      color: #409eff;
+    }
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 20px;
+
+    li {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.8;
+    }
+  }
 }
 
-.balance-label {
-  font-size: 14px;
-  color: #666;
+.confirm-content {
+  .confirm-product {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .confirm-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+    }
+
+    .confirm-info {
+      flex: 1;
+
+      h4 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .confirm-points {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #f59e0b;
+      }
+    }
+  }
+
+  .address-form {
+    margin-bottom: 16px;
+  }
+
+  .confirm-summary {
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+
+    p {
+      display: flex;
+      justify-content: space-between;
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #666;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .value {
+        font-weight: 600;
+        color: #333;
+
+        &.cost {
+          color: #f56c6c;
+        }
+      }
+
+      &.total {
+        padding-top: 8px;
+        border-top: 1px dashed #e8e8e8;
+        font-weight: 600;
+
+        .value {
+          color: #67c23a;
+        }
+      }
+    }
+  }
 }
 
-.balance-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #FF9800;
-}
+@media (max-width: 768px) {
+  .exchange-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
 
-.exchange-options {
-  margin-bottom: 20px;
-}
-
-.options-label {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 12px;
-}
-
-.options-list {
-  display: flex;
-  gap: 12px;
-}
-
-.option-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 12px;
-  border: 2px solid #E4E7ED;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.option-item:hover {
-  border-color: #409EFF;
-}
-
-.option-item.active {
-  border-color: #409EFF;
-  background: #ECF5FF;
-}
-
-.option-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.option-points {
-  font-size: 12px;
-  color: #909399;
-}
-
-.exchange-info {
-  background: #F5F7FA;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  font-size: 14px;
-  color: #666;
-}
-
-.info-row .info-value {
-  font-weight: 500;
-  color: #333;
-}
-
-.exchange-tip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #F0F9FF;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  font-size: 13px;
-  color: #409EFF;
-}
-
-.exchange-tip.warning {
-  background: #FFF3E0;
-  color: #E6A23C;
-}
-
-.exchange-button {
-  width: 100%;
+  .product-list {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

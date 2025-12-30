@@ -55,6 +55,11 @@ export function getResourceList(
       filtered = filtered.filter((r) => r.vipLevel === params.vipLevel);
     }
 
+    // 按定价类型筛选
+    if (params.pricingType !== undefined) {
+      filtered = filtered.filter((r) => (r.pricingType ?? 0) === params.pricingType);
+    }
+
     // 排序
     if (params.sortType === 'download') {
       filtered.sort((a, b) => b.downloadCount - a.downloadCount);

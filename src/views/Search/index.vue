@@ -23,7 +23,7 @@ import SearchBar from '@/components/business/SearchBar.vue';
 import ResourceCard from '@/components/business/ResourceCard.vue';
 import Loading from '@/components/common/Loading.vue';
 import Empty from '@/components/common/Empty.vue';
-import { Filter } from '@element-plus/icons-vue';
+import { Filter, ArrowLeft } from '@element-plus/icons-vue';
 
 /**
  * 搜索结果页
@@ -37,6 +37,18 @@ const userStore = useUserStore();
 // 本地状态
 const showFilterDrawer = ref(false); // 是否显示筛选抽屉（移动端）
 const searchInitialized = ref(false); // 搜索是否已初始化完成
+
+/**
+ * 返回上一页
+ */
+function handleGoBack() {
+  // 如果有历史记录则返回，否则跳转到首页
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/');
+  }
+}
 
 // 筛选选项
 const formatOptions = [
@@ -59,10 +71,12 @@ const vipLevelOptions = [
   { label: 'VIP专属', value: 1 }
 ];
 
-const sortOptions = [
-  { label: '最新上传', value: 'time' },
+const sortOptions: { label: string; value: 'comprehensive' | 'download' | 'latest' | 'like' | 'collect' }[] = [
+  { label: '综合排序', value: 'comprehensive' },
+  { label: '最新上传', value: 'latest' },
   { label: '下载最多', value: 'download' },
-  { label: '最热门', value: 'hot' }
+  { label: '最多点赞', value: 'like' },
+  { label: '最多收藏', value: 'collect' }
 ];
 
 // 计算属性：当前搜索关键词
@@ -223,7 +237,6 @@ function handleResourceClick(resourceId: string) {
  * @param resourceId 资源ID
  */
 function handleDownload(resourceId: string) {
-  console.log('下载资源:', resourceId);
   // TODO: 实现下载逻辑
 }
 
@@ -232,7 +245,6 @@ function handleDownload(resourceId: string) {
  * @param resourceId 资源ID
  */
 async function handleCollect(resourceId: string) {
-  console.log('收藏资源:', resourceId);
   
   // 检查用户是否已登录
   if (!userStore.isLoggedIn) {
@@ -297,7 +309,18 @@ onMounted(() => {
     <!-- 搜索栏 -->
     <div class="search-header">
       <div class="container">
-        <SearchBar @search="handleSearch" />
+        <div class="search-header-content">
+          <!-- 返回按钮 -->
+          <el-button
+            class="back-btn"
+            :icon="ArrowLeft"
+            circle
+            @click="handleGoBack"
+          />
+          <div class="search-bar-wrapper">
+            <SearchBar @search="handleSearch" />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -331,73 +354,72 @@ onMounted(() => {
         <div class="search-main">
           <!-- 侧边筛选栏（桌面端） -->
           <aside class="filter-sidebar desktop-only">
+            <!-- 筛选标题 -->
+            <div class="filter-header">
+              <span class="filter-header-text">筛选条件</span>
+            </div>
+
             <div class="filter-section">
               <h3 class="filter-title">
+                <span class="title-icon">📄</span>
                 文件格式
               </h3>
-              <el-radio-group
-                v-model="currentFormat"
-                class="filter-group"
-                @change="handleFilterChange"
-              >
-                <el-radio
+              <div class="filter-options">
+                <div
                   v-for="option in formatOptions"
                   :key="option.value || 'all'"
-                  :value="option.value"
-                  class="filter-radio"
+                  class="filter-option"
+                  :class="{ 'filter-option-active': currentFormat === option.value }"
+                  @click="currentFormat = option.value; handleFilterChange()"
                 >
                   {{ option.label }}
-                </el-radio>
-              </el-radio-group>
+                </div>
+              </div>
             </div>
 
             <div class="filter-section">
               <h3 class="filter-title">
+                <span class="title-icon">⭐</span>
                 资源类型
               </h3>
-              <el-radio-group
-                v-model="currentVipLevel"
-                class="filter-group"
-                @change="handleFilterChange"
-              >
-                <el-radio
+              <div class="filter-options">
+                <div
                   v-for="option in vipLevelOptions"
                   :key="option.value ?? 'all'"
-                  :value="option.value"
-                  class="filter-radio"
+                  class="filter-option"
+                  :class="{ 'filter-option-active': currentVipLevel === option.value }"
+                  @click="currentVipLevel = option.value; handleFilterChange()"
                 >
                   {{ option.label }}
-                </el-radio>
-              </el-radio-group>
+                </div>
+              </div>
             </div>
 
             <div class="filter-section">
               <h3 class="filter-title">
+                <span class="title-icon">📊</span>
                 排序方式
               </h3>
-              <el-radio-group
-                v-model="currentSortType"
-                class="filter-group"
-                @change="handleFilterChange"
-              >
-                <el-radio
+              <div class="filter-options">
+                <div
                   v-for="option in sortOptions"
                   :key="option.value"
-                  :value="option.value"
-                  class="filter-radio"
+                  class="filter-option"
+                  :class="{ 'filter-option-active': currentSortType === option.value }"
+                  @click="currentSortType = option.value; handleFilterChange()"
                 >
                   {{ option.label }}
-                </el-radio>
-              </el-radio-group>
+                </div>
+              </div>
             </div>
 
-            <el-button
+            <button
               class="reset-btn"
-              text
               @click="handleResetFilters"
             >
+              <span class="reset-icon">🔄</span>
               重置筛选
-            </el-button>
+            </button>
           </aside>
 
           <!-- 资源列表区 -->
@@ -557,6 +579,30 @@ onMounted(() => {
   z-index: 100;
 }
 
+.search-header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.back-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #dcdfe6;
+  background: #fff;
+}
+
+.back-btn:hover {
+  color: #165dff;
+  border-color: #165dff;
+  background: #f0f5ff;
+}
+
+.search-bar-wrapper {
+  flex: 1;
+}
+
 .container {
   max-width: 1400px;
   margin: 0 auto;
@@ -620,58 +666,130 @@ onMounted(() => {
 /* 侧边筛选栏 */
 .filter-sidebar {
   flex-shrink: 0;
-  width: 240px;
+  width: 220px;
   background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   height: fit-content;
   position: sticky;
   top: 100px;
+  overflow: hidden;
 }
 
+/* 筛选头部 */
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 20px;
+  background: linear-gradient(135deg, #165dff 0%, #4080ff 100%);
+  color: #fff;
+}
+
+.filter-header-text {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  text-indent: 6px;
+}
+
+/* 筛选区块 */
 .filter-section {
-  margin-bottom: 24px;
+  padding: 20px;
+  border-bottom: 1px solid #f0f2f5;
 }
 
 .filter-section:last-of-type {
-  margin-bottom: 16px;
+  border-bottom: none;
 }
 
 .filter-title {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: #303133;
-}
-
-.filter-group {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  text-align: center;
 }
 
-.filter-radio {
-  margin: 0;
-  height: auto;
+.title-icon {
+  font-size: 14px;
 }
 
-:deep(.filter-radio .el-radio__label) {
+/* 筛选选项 */
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.filter-option {
+  padding: 8px 14px;
   font-size: 13px;
   color: #606266;
+  background: #f5f7fa;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 1px solid transparent;
+  text-align: center;
+  min-width: 60px;
 }
 
-:deep(.filter-radio.is-checked .el-radio__label) {
+.filter-option:hover {
+  background: #e8f4ff;
   color: #165dff;
+  border-color: #c6e2ff;
+  transform: translateY(-2px);
 }
 
+.filter-option-active {
+  background: linear-gradient(135deg, #165dff 0%, #4080ff 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(22, 93, 255, 0.35);
+}
+
+.filter-option-active:hover {
+  background: linear-gradient(135deg, #0e42d2 0%, #165dff 100%);
+  color: #fff;
+  border-color: transparent;
+  transform: translateY(-2px);
+}
+
+/* 重置按钮 */
 .reset-btn {
-  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 40px);
+  margin: 8px 20px 20px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 500;
   color: #909399;
+  background: #fafafa;
+  border: 1px dashed #dcdfe6;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
 .reset-btn:hover {
-  color: #165dff;
+  color: #ff6b6b;
+  background: #fff5f5;
+  border-color: #ff6b6b;
+  transform: translateY(-2px);
+}
+
+.reset-icon {
+  font-size: 14px;
 }
 
 /* 结果区域 */
@@ -723,6 +841,15 @@ onMounted(() => {
 @media (max-width: 768px) {
   .search-header {
     padding: 16px 0;
+  }
+
+  .search-header-content {
+    gap: 12px;
+  }
+
+  .back-btn {
+    width: 36px;
+    height: 36px;
   }
 
   .container {
@@ -789,7 +916,38 @@ onMounted(() => {
 /* 平板适配 */
 @media (min-width: 769px) and (max-width: 1200px) {
   .filter-sidebar {
-    width: 200px;
+    width: 180px;
+  }
+
+  .filter-header {
+    padding: 14px 16px;
+  }
+
+  .filter-header-text {
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+
+  .filter-section {
+    padding: 16px;
+  }
+
+  .filter-title {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .filter-option {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 50px;
+  }
+
+  .reset-btn {
+    width: calc(100% - 32px);
+    margin: 8px 16px 16px;
+    padding: 10px 12px;
+    font-size: 12px;
   }
 
   .results-grid {
@@ -813,22 +971,67 @@ onMounted(() => {
 
   .search-header,
   .search-info,
-  .filter-sidebar,
   .pagination-wrapper {
     background: #1d1e1f;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .filter-sidebar {
+    background: #1d1e1f;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .filter-header {
+    background: linear-gradient(135deg, #0e42d2 0%, #165dff 100%);
+  }
+
+  .filter-section {
+    border-bottom-color: #3a3a3a;
   }
 
   .filter-title {
     color: #e5eaf3;
   }
 
-  :deep(.filter-radio .el-radio__label) {
+  .filter-option {
+    background: #2b2b2b;
     color: #a8abb2;
+    border-color: transparent;
   }
 
-  :deep(.filter-radio.is-checked .el-radio__label) {
+  .filter-option:hover {
+    background: #353535;
     color: #4080ff;
+    border-color: #4080ff;
+  }
+
+  .filter-option-active {
+    background: linear-gradient(135deg, #0e42d2 0%, #165dff 100%);
+    color: #fff;
+  }
+
+  .reset-btn {
+    background: #2b2b2b;
+    color: #a8abb2;
+    border-color: #4c4d4f;
+  }
+
+  .reset-btn:hover {
+    background: #353535;
+    color: #4080ff;
+    border-color: #4080ff;
+  }
+
+  .back-btn {
+    background: #1d1e1f;
+    border-color: #4c4d4f;
+    color: #e5eaf3;
+  }
+
+  .back-btn:hover {
+    color: #4080ff;
+    border-color: #4080ff;
+    background: #252627;
   }
 
   .search-keyword,

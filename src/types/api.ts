@@ -26,8 +26,10 @@ export function isApiSuccess(res: ApiResponse): boolean {
 export interface PageResponse<T> {
   list: T[];
   total: number;
-  pageNum: number;
+  pageNum?: number;
   pageSize: number;
+  page?: number;  // 后端返回的字段名
+  totalPages?: number;
 }
 
 // 分页请求参数

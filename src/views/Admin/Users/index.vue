@@ -256,23 +256,13 @@ import ResetPasswordDialog from './components/ResetPasswordDialog.vue';
 import AdjustVipDialog from './components/AdjustVipDialog.vue';
 import AdjustPointsDialog from './components/AdjustPointsDialog.vue';
 import { formatTime } from '@/utils/format';
+import { getUserList, updateUserStatus, type AdminUser, type UserListParams } from '@/api/adminUser';
 
 // 格式化日期的辅助函数
 const formatDate = (date: string) => formatTime(date, 'YYYY-MM-DD HH:mm:ss');
 
-// 接口类型定义
-interface User {
-  userId: string;
-  phone: string;
-  nickname: string;
-  avatar: string;
-  vipLevel: number;
-  vipExpireAt: string | null;
-  pointsBalance: number;
-  userLevel: number;
-  status: number;
-  createdAt: string;
-}
+// 使用API定义的类型
+type User = AdminUser;
 
 // 搜索表单
 const searchForm = reactive({
@@ -304,49 +294,52 @@ const adjustPointsDialogVisible = ref(false);
 const selectedUserId = ref('');
 const selectedUser = ref<User | null>(null);
 
+// 排序参数
+const sortParams = reactive({
+  sortBy: '',
+  sortOrder: 'desc' as 'asc' | 'desc'
+});
+
 // 获取用户列表
 const fetchUserList = async () => {
   loading.value = true;
   try {
-    // TODO: 调用后端API获取用户列表
-    // const response = await getUserList({
-    //   keyword: searchForm.keyword,
-    //   vipLevel: searchForm.vipLevel,
-    //   status: searchForm.status,
-    //   page: pagination.page,
-    //   pageSize: pagination.pageSize
-    // });
+    const params: UserListParams = {
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    };
     
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500));
-    userList.value = [
-      {
-        userId: 'user-001',
-        phone: '13800138000',
-        nickname: '张三',
-        avatar: '',
-        vipLevel: 1,
-        vipExpireAt: '2024-12-31 23:59:59',
-        pointsBalance: 1500,
-        userLevel: 3,
-        status: 1,
-        createdAt: '2024-01-15 10:30:00'
-      },
-      {
-        userId: 'user-002',
-        phone: '13800138001',
-        nickname: '李四',
-        avatar: '',
-        vipLevel: 0,
-        vipExpireAt: null,
-        pointsBalance: 500,
-        userLevel: 2,
-        status: 1,
-        createdAt: '2024-02-20 14:20:00'
+    // 添加搜索条件
+    if (searchForm.keyword) {
+      params.keyword = searchForm.keyword;
+    }
+    if (searchForm.vipLevel !== undefined) {
+      params.vipLevel = searchForm.vipLevel;
+    }
+    if (searchForm.status !== undefined) {
+      params.status = searchForm.status;
+    }
+    
+    // 添加排序参数
+    if (sortParams.sortBy) {
+      params.sortBy = sortParams.sortBy;
+      params.sortOrder = sortParams.sortOrder;
+    }
+    
+    const response = await getUserList(params);
+    
+    if (response.code === 200 && response.data) {
+      userList.value = response.data.list || [];
+      pagination.total = response.data.total || 0;
+      // 后端返回的是 page，不是 pageNum
+      if (response.data.page) {
+        pagination.page = response.data.page;
       }
-    ];
-    pagination.total = 2;
+    } else {
+      ElMessage.error(response.message || '获取用户列表失败');
+    }
   } catch (error) {
+    console.error('获取用户列表失败:', error);
     ElMessage.error('获取用户列表失败');
   } finally {
     loading.value = false;
@@ -369,9 +362,14 @@ const handleReset = () => {
 };
 
 // 排序变化
-const handleSortChange = ({ prop, order }: any) => {
-  // TODO: 实现排序逻辑
-  console.log('Sort:', prop, order);
+const handleSortChange = ({ prop, order }: { prop: string; order: string | null }) => {
+  if (order) {
+    sortParams.sortBy = prop;
+    sortParams.sortOrder = order === 'ascending' ? 'asc' : 'desc';
+  } else {
+    sortParams.sortBy = '';
+    sortParams.sortOrder = 'desc';
+  }
   fetchUserList();
 };
 
@@ -395,9 +393,11 @@ const handleViewDetail = (user: User) => {
 // 切换用户状态
 const handleToggleStatus = async (user: User) => {
   const action = user.status === 1 ? '禁用' : '启用';
+  const newStatus = user.status === 1 ? 0 : 1;
+  
   try {
     await ElMessageBox.confirm(
-      `确定要${action}用户"${user.nickname}"吗？`,
+      `确定要${action}用户"${user.nickname || user.phone}"吗？`,
       '确认操作',
       {
         confirmButtonText: '确定',
@@ -406,13 +406,17 @@ const handleToggleStatus = async (user: User) => {
       }
     );
 
-    // TODO: 调用后端API切换用户状态
-    // await toggleUserStatus(user.userId);
+    const response = await updateUserStatus(user.userId, newStatus);
     
-    ElMessage.success(`${action}成功`);
-    fetchUserList();
+    if (response.code === 200) {
+      ElMessage.success(`${action}成功`);
+      fetchUserList();
+    } else {
+      ElMessage.error(response.message || `${action}失败`);
+    }
   } catch (error) {
     if (error !== 'cancel') {
+      console.error(`${action}失败:`, error);
       ElMessage.error(`${action}失败`);
     }
   }

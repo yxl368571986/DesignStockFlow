@@ -51,7 +51,6 @@ onMounted(() => {
   // 开发环境：打印性能报告
   if (import.meta.env.DEV) {
     setTimeout(() => {
-      console.log('=== 资源列表页性能报告 ===');
       (window as any).__PERF__?.printReport();
       (window as any).__PERF__?.printSuggestions('OptimizedResourceList');
     }, 1000);

@@ -71,10 +71,38 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
     'application/vnd.adobe.photoshop', // PSD
     'application/postscript', // AI
     'image/vnd.adobe.photoshop', // PSD
+    'application/octet-stream', // 通用二进制类型（PSD、AI等文件可能被识别为此类型）
   ];
 
+  // 允许的文件扩展名（用于 application/octet-stream 类型的额外验证）
+  const allowedExtensions = [
+    '.psd', '.ai', '.eps', '.cdr', '.sketch', '.xd', '.figma',
+    '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp',
+    '.pdf', '.zip', '.rar', '.7z'
+  ];
+
+  // 解码文件名
+  let decodedName: string;
+  try {
+    decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+  } catch {
+    decodedName = file.originalname;
+  }
+  const ext = path.extname(decodedName).toLowerCase();
+
+  // 如果MIME类型在允许列表中
   if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
+    // 对于 application/octet-stream，需要额外检查扩展名
+    if (file.mimetype === 'application/octet-stream') {
+      if (allowedExtensions.includes(ext)) {
+        logger.info(`文件类型验证通过: ${decodedName} (MIME: ${file.mimetype}, 扩展名: ${ext})`);
+        cb(null, true);
+      } else {
+        cb(new Error(`不支持的文件扩展名: ${ext}`));
+      }
+    } else {
+      cb(null, true);
+    }
   } else {
     cb(new Error(`不支持的文件类型: ${file.mimetype}`));
   }

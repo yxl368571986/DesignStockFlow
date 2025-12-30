@@ -1,0 +1,340 @@
+# 实现计划：积分充值系统
+
+## 概述
+
+本实现计划基于已批准的需求文档和设计文档，将积分充值系统功能分解为可执行的开发任务。采用增量开发方式，优先实现核心充值功能，再扩展管理和统计功能。
+
+## 任务列表
+
+- [x] 1. 数据库模型扩展【必须时刻保持中文回复】
+  - [x] 1.1 创建充值套餐表(recharge_packages)的Prisma模型
+    - 添加package_id, package_name, package_code, price, base_points, bonus_points等字段
+    - 添加sort_order, is_recommend, status字段
+    - 创建索引
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 1.2 创建充值订单表(recharge_orders)的Prisma模型
+    - 添加order_id, order_no, user_id, package_id, amount, total_points等字段
+    - 添加payment_method, payment_status, transaction_id, expire_at等字段
+    - 创建索引和外键关联
+    - _Requirements: 2.2, 2.3_
+  - [x] 1.3 创建支付回调记录表(recharge_callbacks)的Prisma模型
+    - 添加callback_id, order_no, channel, transaction_id, callback_data等字段
+    - 添加signature_valid, processed, process_result字段
+    - _Requirements: 2.4_
+  - [x] 1.4 创建积分调整日志表(points_adjustment_logs)的Prisma模型
+    - 添加log_id, admin_id, target_user_id, adjustment_type, points_change, reason等字段
+    - 添加is_revoked, revoked_at, revoked_by字段
+    - _Requirements: 3.7, 3.8_
+  - [x] 1.5 执行数据库迁移
+    - 运行prisma migrate dev生成迁移文件
+    - 验证表结构正确创建
+    - _Requirements: 5.1, 5.2_
+
+- [x] 2. 充值套餐管理服务【必须时刻保持中文回复】
+  - [x] 2.1 实现RechargePackageService基础CRUD
+    - 创建backend/src/services/rechargePackageService.ts
+    - 实现getAvailablePackages()获取启用的套餐列表
+    - 实现createPackage()创建套餐（含验证逻辑）
+    - 实现updatePackage()更新套餐
+    - 实现disablePackage()禁用套餐
+    - _Requirements: 1.1, 1.2, 1.3, 1.5_
+  - [x] 2.2 编写套餐数据验证属性测试
+    - **Property 1: 套餐数据验证完整性**
+    - 测试套餐名称唯一性验证
+    - 测试价格为正数验证
+    - 测试基础积分=价格×10验证
+    - 测试性价比计算正确性
+    - **Validates: Requirements 1.1, 1.4**
+  - [x] 2.3 实现套餐性价比计算函数
+    - 计算积分/元比值
+    - 计算节省金额
+    - 标记推荐套餐
+    - _Requirements: 1.4_
+
+- [x] 3. 充值订单服务【必须时刻保持中文回复】
+  - [x] 3.1 实现RechargeOrderService核心功能
+    - 创建backend/src/services/rechargeOrderService.ts
+    - 实现createRechargeOrder()创建充值订单
+    - 生成唯一订单号（格式：RC+时间戳+随机数）
+    - 设置订单30分钟有效期
+    - _Requirements: 2.2, 2.3_
+  - [x] 3.2 编写订单生命周期属性测试
+    - **Property 2: 订单生命周期一致性**
+    - 测试订单号全局唯一性
+    - 测试订单超时自动取消
+    - 测试订单状态流转正确性
+    - **Validates: Requirements 2.2, 2.3**
+  - [x] 3.3 实现订单状态查询和取消功能
+    - 实现getOrderStatus()查询订单状态
+    - 实现cancelOrder()手动取消订单
+    - 实现cancelExpiredOrders()定时取消超时订单
+    - _Requirements: 2.3_
+  - [x] 3.4 实现充值限制检查
+    - 检查VIP用户禁止充值
+    - 检查账号状态（冻结禁止充值）
+    - 检查每日充值次数和金额限制
+    - _Requirements: 2.10, 4.9, 9.8_
+  - [x] 3.5 编写充值限制属性测试
+    - **Property 7: 充值限制有效性**
+    - 测试VIP用户充值被拒绝
+    - 测试冻结账号充值被拒绝
+    - 测试超出限制被拒绝
+    - **Validates: Requirements 2.10, 9.8, 4.9**
+
+- [x] 4. 支付回调处理服务【必须时刻保持中文回复】
+  - [x] 4.1 实现PaymentCallbackService签名验证
+    - 创建backend/src/services/payment/rechargeCallbackService.ts
+    - 实现verifyWechatCallback()微信签名验证
+    - 实现verifyAlipayCallback()支付宝签名验证
+    - 复用现有payment配置
+    - _Requirements: 2.4_
+  - [x] 4.2 实现支付回调处理（幂等）
+    - 实现processCallback()处理支付回调
+    - 检查transaction_id是否已处理（幂等）
+    - 记录回调日志
+    - 触发积分发放
+    - _Requirements: 2.4, 2.5, 2.9_
+  - [x] 4.3 编写支付回调幂等性属性测试
+    - **Property 3: 支付回调幂等性**
+    - 测试相同transaction_id只处理一次
+    - 测试签名验证失败不发放积分
+    - 测试重复支付触发退款
+    - **Validates: Requirements 2.4, 2.5, 2.6, 2.8, 2.9**
+  - [x] 4.4 实现积分发放逻辑
+    - 调用现有pointsService.addPoints()
+    - 设置change_type为'recharge'
+    - 生成积分变动记录
+    - 发送站内通知
+    - _Requirements: 2.5, 2.6_
+
+- [x] 5. Checkpoint - 核心充值功能验证【必须时刻保持中文回复】
+  - 确保所有测试通过
+  - 验证充值订单创建流程
+  - 验证支付回调处理流程
+  - 如有问题请咨询用户
+
+- [x] 6. 管理员积分调整服务【必须时刻保持中文回复】
+  - [x] 6.1 实现AdminPointsService基础功能
+    - 创建backend/src/services/adminPointsService.ts
+    - 实现adjustUserPoints()单用户积分调整
+    - 实现余额校验（扣除时余额≥扣除数量）
+    - 实现调整原因验证（20-200字）
+    - _Requirements: 3.3, 3.5_
+  - [x] 6.2 编写积分调整安全性属性测试
+    - **Property 5: 积分调整安全性**
+    - 测试余额不足时扣除失败
+    - 测试调整后余额不为负
+    - 测试原因长度验证
+    - **Validates: Requirements 3.3, 3.5, 3.9, 3.10**
+  - [x] 6.3 实现批量积分赠送
+    - 实现batchGiftPoints()批量赠送
+    - 支持用户ID列表输入
+    - 返回成功/失败统计
+    - _Requirements: 3.4_
+  - [x] 6.4 实现积分调整撤销
+    - 实现revokeAdjustment()撤销调整
+    - 检查24小时时间限制
+    - 检查积分是否已消耗
+    - 恢复用户积分余额
+    - _Requirements: 3.8_
+  - [x] 6.5 编写撤销操作属性测试
+    - **Property 6: 撤销操作有效性**
+    - 测试24小时内可撤销
+    - 测试超过24小时不可撤销
+    - 测试积分已消耗不可撤销
+    - **Validates: Requirements 3.8**
+  - [x] 6.6 实现二次审批检查
+    - 实现checkApprovalRequired()
+    - 单次≥1000积分触发审批
+    - 批量≥100人触发审批
+    - _Requirements: 3.9_
+  - [x] 6.7 实现调整日志记录
+    - 记录操作员、时间、目标用户、调整类型、数量、原因
+    - 实现getAdjustmentLogs()查询日志
+    - _Requirements: 3.7_
+
+- [x] 7. 对账服务【必须时刻保持中文回复】
+  - [x] 7.1 实现ReconciliationService
+    - 创建backend/src/services/reconciliation/rechargeReconciliationService.ts
+    - 实现findAnomalousOrders()查找异常订单
+    - 实现autoFix()自动补单
+    - _Requirements: 2.8_
+  - [x] 7.2 实现重复支付检测
+    - 实现detectDuplicatePayment()
+    - 检测同一transaction_id多次回调
+    - 触发退款流程
+    - _Requirements: 2.9_
+
+- [x] 8. Checkpoint - 后端服务完成验证【必须时刻保持中文回复】
+  - 确保所有测试通过 (76个测试全部通过)
+  - 验证管理员积分调整流程
+  - 验证对账和补单流程
+  - 如有问题请咨询用户
+
+- [x] 9. 后端API路由【必须时刻保持中文回复】
+  - [x] 9.1 实现用户端充值API路由
+    - 创建backend/src/routes/rechargeRoutes.ts
+    - GET /api/v1/recharge/packages - 获取套餐列表
+    - POST /api/v1/recharge/orders - 创建充值订单
+    - GET /api/v1/recharge/orders/:orderId - 查询订单状态
+    - POST /api/v1/recharge/orders/:orderId/cancel - 取消订单
+    - _Requirements: 2.1, 2.2_
+  - [x] 9.2 实现支付回调API路由
+    - POST /api/v1/payment/recharge/wechat/callback - 微信回调
+    - POST /api/v1/payment/recharge/alipay/callback - 支付宝回调
+    - _Requirements: 2.4_
+  - [x] 9.3 实现管理端API路由
+    - 创建backend/src/routes/adminRechargeRoutes.ts
+    - GET /api/v1/admin/recharge/packages - 获取所有套餐
+    - POST /api/v1/admin/recharge/packages - 创建套餐
+    - PUT /api/v1/admin/recharge/packages/:id - 更新套餐
+    - DELETE /api/v1/admin/recharge/packages/:id - 禁用套餐
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 9.4 实现管理端积分调整API路由
+    - POST /api/v1/admin/points-adjust/adjust - 调整用户积分
+    - POST /api/v1/admin/points-adjust/batch-gift - 批量赠送
+    - POST /api/v1/admin/points-adjust/revoke/:recordId - 撤销调整
+    - GET /api/v1/admin/points-adjust/adjustment-logs - 查询调整日志
+    - _Requirements: 3.1, 3.2, 3.4, 3.7_
+  - [x] 9.5 实现权限中间件
+    - 使用现有requirePermissions中间件
+    - 实现敏感操作二次验证
+    - _Requirements: 3.1, 8.3, 8.4_
+  - [x] 9.6 编写权限控制属性测试
+    - **Property 10: 权限控制有效性**
+    - 测试无权限返回403
+    - 测试普通用户返回401
+    - **Validates: Requirements 3.1, 8.3, 8.4**
+
+- [x] 10. 前端API接口层【必须时刻保持中文回复】
+  - [x] 10.1 扩展前端积分API
+    - 创建src/api/recharge.ts
+    - 添加getRechargePackages()接口
+    - 添加createRechargeOrder()接口
+    - 添加getRechargeOrderStatus()接口
+    - 添加cancelRechargeOrder()接口
+    - _Requirements: 2.1, 2.2_
+  - [x] 10.2 添加管理端API接口
+    - 创建src/api/adminRecharge.ts
+    - 添加套餐管理CRUD接口
+    - 添加积分调整接口
+    - 添加调整日志查询接口
+    - _Requirements: 1.1, 3.1_
+
+- [x] 11. 前端充值页面【必须时刻保持中文回复】
+  - [x] 11.1 创建充值页面组件
+    - 创建src/views/Points/Recharge.vue
+    - 展示3个充值套餐
+    - 显示性价比和推荐标签
+    - 支付方式选择（微信/支付宝）
+    - _Requirements: 2.1, 1.4_
+  - [x] 11.2 实现VIP用户提示
+    - 检测VIP用户身份
+    - 显示"VIP用户无需充值"提示
+    - 隐藏充值按钮
+    - _Requirements: 2.10_
+  - [x] 11.3 实现订单创建和支付跳转
+    - 调用创建订单API
+    - 生成支付二维码或跳转支付页面
+    - 轮询订单状态
+    - _Requirements: 2.2_
+  - [x] 11.4 实现支付结果展示
+    - 支付成功展示积分到账信息
+    - 支付失败展示错误原因和重试按钮
+    - _Requirements: 2.5, 2.7_
+
+- [x] 12. 前端管理后台页面【必须时刻保持中文回复】
+  - [x] 12.1 创建套餐管理页面
+    - 创建src/views/Admin/Points/PackageManagement.vue
+    - 套餐列表展示
+    - 创建/编辑套餐表单
+    - 启用/禁用套餐操作
+    - 拖拽排序功能
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [x] 12.2 创建用户积分调整页面
+    - 创建src/views/Admin/Points/UserPointsAdjust.vue
+    - 用户搜索（ID/用户名/手机号）
+    - 积分调整表单（增加/扣除）
+    - 调整原因输入（20-200字验证）
+    - 二次确认弹窗
+    - _Requirements: 3.2, 3.3_
+  - [x] 12.3 创建批量赠送页面
+    - 创建src/views/Admin/Points/BatchGift.vue
+    - Excel导入用户列表
+    - 选择"所有用户"选项
+    - 赠送结果统计展示
+    - _Requirements: 3.4_
+  - [x] 12.4 创建充值订单管理页面
+    - 创建src/views/Admin/Points/RechargeOrders.vue
+    - 订单列表（分页、筛选）
+    - 订单详情查看
+    - 订单状态筛选
+    - _Requirements: 2.2_
+  - [x] 12.5 创建积分调整日志页面
+    - 创建src/views/Admin/Points/AdjustmentLogs.vue
+    - 日志列表展示
+    - 按操作员/时间筛选
+    - 撤销操作按钮
+    - _Requirements: 3.7, 3.8_
+
+- [x] 13. Checkpoint - 前端功能验证【必须时刻保持中文回复】
+  - 确保所有页面正常渲染
+  - 验证充值流程端到端
+  - 验证管理后台功能
+  - 如有问题请咨询用户
+
+- [x] 14. 积分统计服务【必须时刻保持中文回复】
+  - [x] 14.1 扩展统计服务
+    - 更新backend/src/services/statisticsService.ts
+    - 实现getRechargeStatistics()充值统计
+    - 实现getPointsFlowStatistics()积分流水统计
+    - 支持日/周/月/年维度
+    - _Requirements: 7.1, 7.2, 7.5, 7.6_
+  - [x] 14.2 编写统计数据准确性属性测试
+    - **Property 8: 统计数据准确性**
+    - 测试发放积分统计正确
+    - 测试消耗积分统计正确
+    - 测试充值用户数统计正确
+    - **Validates: Requirements 7.1, 7.2, 7.5**
+  - [x] 14.3 实现统计API路由
+    - GET /api/v1/admin/recharge/statistics - 充值统计
+    - GET /api/v1/admin/points-adjust/flow-statistics - 积分流水统计
+    - _Requirements: 7.1, 7.2_
+
+- [x] 15. 前端统计页面【必须时刻保持中文回复】
+  - [x] 15.1 创建积分统计页面
+    - 创建src/views/Admin/Points/Statistics.vue
+    - 积分生成/消耗统计卡片
+    - 趋势图（使用ECharts）
+    - 时间维度切换
+    - _Requirements: 7.1, 7.2, 7.6_
+  - [x] 15.2 实现报表导出
+    - CSV导出功能（已实现exportExcel函数）
+    - 自定义时间范围（日期选择器已实现）
+    - _Requirements: 7.8_
+
+- [x] 16. 定时任务【必须时刻保持中文回复】
+  - [x] 16.1 实现订单超时取消任务
+    - 创建backend/src/tasks/rechargeOrderTask.ts
+    - 每分钟检查超时订单
+    - 自动取消并通知用户
+    - _Requirements: 2.3_
+  - [x] 16.2 实现对账任务
+    - 每10分钟执行对账
+    - 自动补单异常订单
+    - 记录对账日志
+    - _Requirements: 2.8_
+
+- [x] 17. 最终验证【必须时刻保持中文回复】
+  - [x] 运行所有单元测试 (420个测试全部通过)
+  - [x] 运行所有属性测试 (Property 1-8, 10-11 全部通过)
+  - [x] 验证TypeScript编译 (前后端均通过)
+  - [x] 检查错误处理和日志记录
+  - 如有问题请咨询用户
+
+## 注意事项
+
+- 所有任务均为必需任务，包括属性测试
+- 每个Checkpoint需要确保前置任务全部完成
+- 属性测试使用fast-check库，每个测试运行100次迭代
+- 复用现有的支付配置和积分服务，避免重复开发

@@ -8,6 +8,7 @@ import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getUserDevices, kickDevice } from '@/api/vip';
 import type { DeviceInfo } from '@/api/vip';
+import { formatRelativeTime } from '@/utils/format';
 
 /** 设备列表 */
 const devices = ref<DeviceInfo[]>([]);
@@ -31,29 +32,7 @@ function getDeviceIcon(deviceType: string): string {
 /** 格式化时间 */
 function formatTime(time: string): string {
   if (!time) return '-';
-  const date = new Date(time);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  
-  // 1分钟内
-  if (diff < 60 * 1000) {
-    return '刚刚';
-  }
-  // 1小时内
-  if (diff < 60 * 60 * 1000) {
-    return `${Math.floor(diff / (60 * 1000))}分钟前`;
-  }
-  // 24小时内
-  if (diff < 24 * 60 * 60 * 1000) {
-    return `${Math.floor(diff / (60 * 60 * 1000))}小时前`;
-  }
-  // 超过24小时
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  return formatRelativeTime(time);
 }
 
 /** 加载设备列表 */

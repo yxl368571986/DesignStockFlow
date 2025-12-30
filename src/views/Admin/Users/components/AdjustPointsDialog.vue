@@ -96,6 +96,7 @@ import { ref, reactive, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Right } from '@element-plus/icons-vue';
 import type { FormInstance, FormRules } from 'element-plus';
+import { adjustUserPoints } from '@/api/adminUser';
 
 interface Props {
   modelValue: boolean;
@@ -201,24 +202,22 @@ const handleSubmit = async () => {
 
       loading.value = true;
       try {
-        // TODO: 调用后端API调整积分
-        // await adjustUserPoints({
-        //   userId: props.user.userId,
-        //   adjustType: form.adjustType,
-        //   points: form.points,
-        //   reason: form.reason
-        // });
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // 调用后端API调整积分
+        await adjustUserPoints(props.user.userId, {
+          type: form.adjustType,
+          amount: form.points,
+          reason: form.reason
+        });
         
         ElMessage.success('积分调整成功');
+        visible.value = false;
         emit('success');
-      } catch (error) {
-        ElMessage.error('积分调整失败');
+      } catch (error: any) {
+        ElMessage.error(error?.message || '积分调整失败');
       } finally {
         loading.value = false;
       }
-    } catch (error) {
+    } catch {
       // 用户取消操作
     }
   });

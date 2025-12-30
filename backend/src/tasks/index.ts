@@ -7,12 +7,15 @@ import { ScheduledTask } from 'node-cron';
 import { startReconciliationTask } from './reconciliation.js';
 import { startVipReminderTask } from './vipReminder.js';
 import { startOrderTimeoutTask } from './orderTimeout.js';
+import { startRechargeOrderTask, startRechargeReconciliationTask } from './rechargeOrderTask.js';
 import logger from '../utils/logger.js';
 
 interface TaskRegistry {
   reconciliation?: ScheduledTask;
   vipReminder?: ScheduledTask;
   orderTimeout?: ScheduledTask;
+  rechargeOrderTimeout?: ScheduledTask;
+  rechargeReconciliation?: ScheduledTask;
 }
 
 const tasks: TaskRegistry = {};
@@ -32,6 +35,12 @@ export function startAllTasks(): void {
 
     // 启动订单超时取消任务（每分钟）
     tasks.orderTimeout = startOrderTimeoutTask();
+
+    // 启动充值订单超时取消任务（每分钟）
+    tasks.rechargeOrderTimeout = startRechargeOrderTask();
+
+    // 启动充值订单对账任务（每10分钟）
+    tasks.rechargeReconciliation = startRechargeReconciliationTask();
 
     logger.info('========== 定时任务启动完成 ==========');
   } catch (error) {
@@ -60,6 +69,16 @@ export function stopAllTasks(): void {
     logger.info('[订单超时任务] 已停止');
   }
 
+  if (tasks.rechargeOrderTimeout) {
+    tasks.rechargeOrderTimeout.stop();
+    logger.info('[充值订单超时任务] 已停止');
+  }
+
+  if (tasks.rechargeReconciliation) {
+    tasks.rechargeReconciliation.stop();
+    logger.info('[充值订单对账任务] 已停止');
+  }
+
   logger.info('========== 定时任务已全部停止 ==========');
 }
 
@@ -71,6 +90,8 @@ export function getTaskStatus(): Record<string, boolean> {
     reconciliation: !!tasks.reconciliation,
     vipReminder: !!tasks.vipReminder,
     orderTimeout: !!tasks.orderTimeout,
+    rechargeOrderTimeout: !!tasks.rechargeOrderTimeout,
+    rechargeReconciliation: !!tasks.rechargeReconciliation,
   };
 }
 

@@ -13,6 +13,15 @@ import {
   deleteNotification,
 } from '@/controllers/notificationController.js';
 import { getDownloadStats } from '@/controllers/downloadController.js';
+import {
+  getEarningsListHandler,
+  getEarningsStatsHandler,
+} from '@/controllers/earningsController.js';
+import {
+  getPointsExpiryHandler,
+  getExpiryReminderHandler,
+  getExpiringPointsHandler,
+} from '@/controllers/pointsExpiryController.js';
 
 const router = Router();
 
@@ -125,5 +134,58 @@ router.put('/notifications/:notificationId/read', authenticate, markAsRead);
  * @access  Private (需要认证)
  */
 router.delete('/notifications/:notificationId', authenticate, deleteNotification);
+
+/**
+ * 收益相关接口
+ */
+
+/**
+ * @route   GET /api/v1/user/earnings
+ * @desc    获取收益明细列表
+ * @access  Private (需要认证)
+ * 
+ * 需求: 8.1, 8.2, 8.3
+ */
+router.get('/earnings', authenticate, getEarningsListHandler);
+
+/**
+ * @route   GET /api/v1/user/earnings/stats
+ * @desc    获取收益统计
+ * @access  Private (需要认证)
+ * 
+ * 需求: 8.4
+ */
+router.get('/earnings/stats', authenticate, getEarningsStatsHandler);
+
+/**
+ * 积分有效期相关接口
+ */
+
+/**
+ * @route   GET /api/v1/user/points/expiry
+ * @desc    获取积分有效期明细
+ * @access  Private (需要认证)
+ * 
+ * 需求: 11.2
+ */
+router.get('/points/expiry', authenticate, getPointsExpiryHandler);
+
+/**
+ * @route   GET /api/v1/user/points/expiry-reminder
+ * @desc    获取积分过期提醒信息
+ * @access  Private (需要认证)
+ * 
+ * 需求: 11.3
+ */
+router.get('/points/expiry-reminder', authenticate, getExpiryReminderHandler);
+
+/**
+ * @route   GET /api/v1/user/points/expiring
+ * @desc    获取即将过期的积分列表
+ * @access  Private (需要认证)
+ * 
+ * 需求: 11.3
+ */
+router.get('/points/expiring', authenticate, getExpiringPointsHandler);
 
 export default router;

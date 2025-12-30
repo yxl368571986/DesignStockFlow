@@ -269,6 +269,31 @@ import adminSecurityRoutes from '@/routes/adminSecurity.js';
 app.use('/api/v1/admin/security', adminSecurityRoutes);
 logger.info('🔒 Admin security routes loaded');
 
+// 风控审核路由
+import adminRiskControlRoutes from '@/routes/adminRiskControl.js';
+app.use('/api/v1/admin/risk-control', adminRiskControlRoutes);
+logger.info('🛡️ Admin risk control routes loaded');
+
+// 兑换审计路由
+import adminExchangeAuditRoutes from '@/routes/adminExchangeAudit.js';
+app.use('/api/v1/admin/points/exchange', adminExchangeAuditRoutes);
+logger.info('📋 Admin exchange audit routes loaded');
+
+// 充值路由
+import rechargeRoutes from '@/routes/rechargeRoutes.js';
+app.use('/api/v1/recharge', rechargeRoutes);
+logger.info('💰 Recharge routes loaded');
+
+// 管理端充值路由
+import adminRechargeRoutes from '@/routes/adminRechargeRoutes.js';
+app.use('/api/v1/admin/recharge', adminRechargeRoutes);
+logger.info('💰 Admin recharge routes loaded');
+
+// 管理端积分调整路由
+import adminPointsAdjustRoutes from '@/routes/adminPointsAdjustRoutes.js';
+app.use('/api/v1/admin/points-adjust', adminPointsAdjustRoutes);
+logger.info('🎯 Admin points adjust routes loaded');
+
 // 公共内容路由
 import contentRoutes from '@/routes/content.js';
 app.use('/api/v1/content', contentRoutes);

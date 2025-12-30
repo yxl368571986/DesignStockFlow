@@ -1,5 +1,5 @@
 ﻿import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -11,7 +11,7 @@ export const getAnnouncements = async (req: Request, res: Response) => {
   try {
     const { status, type, page = 1, limit = 20 } = req.query;
 
-    const where: any = {};
+    const where: Prisma.announcementsWhereInput = {};
     if (status !== undefined) {
       where.status = parseInt(status as string);
     }
@@ -35,22 +35,38 @@ export const getAnnouncements = async (req: Request, res: Response) => {
       prisma.announcements.count({ where })
     ]);
 
+    // 转换为camelCase格式
+    const formattedList = announcements.map(ann => ({
+      announcementId: ann.announcement_id,
+      title: ann.title,
+      content: ann.content,
+      type: ann.type,
+      linkUrl: ann.link_url,
+      isTop: ann.is_top,
+      startTime: ann.start_time?.toISOString() || null,
+      endTime: ann.end_time?.toISOString() || null,
+      status: ann.status,
+      createdAt: ann.created_at.toISOString(),
+      updatedAt: ann.updated_at.toISOString()
+    }));
+
     res.json({
       code: 200,
       message: '获取公告列表成功',
       data: {
-        list: announcements,
+        list: formattedList,
         total,
         page: parseInt(page as string),
         limit: parseInt(limit as string)
       }
     });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
     console.error('获取公告列表失败:', error);
     res.status(500).json({
       code: 500,
       message: '获取公告列表失败',
-      error: error.message
+      error: errorMessage
     });
   }
 };
@@ -65,10 +81,10 @@ export const createAnnouncement = async (req: Request, res: Response) => {
       title,
       content,
       type = 'normal',
-      link_url,
-      is_top = false,
-      start_time,
-      end_time,
+      linkUrl,
+      isTop = false,
+      startTime,
+      endTime,
       status = 1
     } = req.body;
 
@@ -94,25 +110,41 @@ export const createAnnouncement = async (req: Request, res: Response) => {
         title,
         content,
         type,
-        link_url,
-        is_top,
-        start_time: start_time ? new Date(start_time) : null,
-        end_time: end_time ? new Date(end_time) : null,
+        link_url: linkUrl,
+        is_top: isTop,
+        start_time: startTime ? new Date(startTime) : null,
+        end_time: endTime ? new Date(endTime) : null,
         status
       }
     });
 
+    // 转换为camelCase格式
+    const formattedData = {
+      announcementId: announcement.announcement_id,
+      title: announcement.title,
+      content: announcement.content,
+      type: announcement.type,
+      linkUrl: announcement.link_url,
+      isTop: announcement.is_top,
+      startTime: announcement.start_time?.toISOString() || null,
+      endTime: announcement.end_time?.toISOString() || null,
+      status: announcement.status,
+      createdAt: announcement.created_at.toISOString(),
+      updatedAt: announcement.updated_at.toISOString()
+    };
+
     res.json({
       code: 200,
       message: '添加公告成功',
-      data: announcement
+      data: formattedData
     });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
     console.error('添加公告失败:', error);
     res.status(500).json({
       code: 500,
       message: '添加公告失败',
-      error: error.message
+      error: errorMessage
     });
   }
 };
@@ -128,10 +160,10 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
       title,
       content,
       type,
-      link_url,
-      is_top,
-      start_time,
-      end_time,
+      linkUrl,
+      isTop,
+      startTime,
+      endTime,
       status
     } = req.body;
 
@@ -158,14 +190,14 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
       }
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.announcementsUpdateInput = {};
     if (title !== undefined) updateData.title = title;
     if (content !== undefined) updateData.content = content;
     if (type !== undefined) updateData.type = type;
-    if (link_url !== undefined) updateData.link_url = link_url;
-    if (is_top !== undefined) updateData.is_top = is_top;
-    if (start_time !== undefined) updateData.start_time = start_time ? new Date(start_time) : null;
-    if (end_time !== undefined) updateData.end_time = end_time ? new Date(end_time) : null;
+    if (linkUrl !== undefined) updateData.link_url = linkUrl;
+    if (isTop !== undefined) updateData.is_top = isTop;
+    if (startTime !== undefined) updateData.start_time = startTime ? new Date(startTime) : null;
+    if (endTime !== undefined) updateData.end_time = endTime ? new Date(endTime) : null;
     if (status !== undefined) updateData.status = status;
 
     const announcement = await prisma.announcements.update({
@@ -173,17 +205,33 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
       data: updateData
     });
 
+    // 转换为camelCase格式
+    const formattedData = {
+      announcementId: announcement.announcement_id,
+      title: announcement.title,
+      content: announcement.content,
+      type: announcement.type,
+      linkUrl: announcement.link_url,
+      isTop: announcement.is_top,
+      startTime: announcement.start_time?.toISOString() || null,
+      endTime: announcement.end_time?.toISOString() || null,
+      status: announcement.status,
+      createdAt: announcement.created_at.toISOString(),
+      updatedAt: announcement.updated_at.toISOString()
+    };
+
     res.json({
       code: 200,
       message: '编辑公告成功',
-      data: announcement
+      data: formattedData
     });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
     console.error('编辑公告失败:', error);
     res.status(500).json({
       code: 500,
       message: '编辑公告失败',
-      error: error.message
+      error: errorMessage
     });
   }
 };
@@ -216,12 +264,13 @@ export const deleteAnnouncement = async (req: Request, res: Response) => {
       code: 200,
       message: '删除公告成功'
     });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
     console.error('删除公告失败:', error);
     res.status(500).json({
       code: 500,
       message: '删除公告失败',
-      error: error.message
+      error: errorMessage
     });
   }
 };

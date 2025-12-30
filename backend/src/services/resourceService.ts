@@ -18,6 +18,7 @@ export interface ResourceListQuery {
   pageSize?: number;
   categoryId?: string;
   vipLevel?: number;
+  pricingType?: number;
   keyword?: string;
   sortBy?: 'comprehensive' | 'download' | 'latest' | 'like' | 'collect';
   format?: string;
@@ -38,6 +39,7 @@ export interface ResourceListItem {
   categoryId: string | null;
   tags: string[];
   vipLevel: number;
+  pricingType?: number;
   format: string | null;
   downloadCount: number;
   viewCount: number;
@@ -124,6 +126,7 @@ class ResourceService {
         pageSize = 20,
         categoryId,
         vipLevel,
+        pricingType,
         keyword,
         sortBy = 'comprehensive',
         format,
@@ -144,6 +147,11 @@ class ResourceService {
         where.vip_level = vipLevel;
       }
 
+      // 添加定价类型筛选
+      if (pricingType !== undefined) {
+        where.pricing_type = pricingType;
+      }
+
       // 添加文件格式筛选
       if (format) {
         where.file_format = {
@@ -156,6 +164,12 @@ class ResourceService {
         where.OR = [
           { title: { contains: keyword, mode: 'insensitive' } },
           { description: { contains: keyword, mode: 'insensitive' } },
+          { tags: { has: keyword } },
+          { 
+            categories: { 
+              category_name: { contains: keyword, mode: 'insensitive' } 
+            } 
+          },
         ];
       }
 
@@ -198,6 +212,8 @@ class ResourceService {
             category_id: true,
             tags: true,
             vip_level: true,
+            pricing_type: true,
+            points_cost: true,
             file_format: true,
             download_count: true,
             view_count: true,
@@ -238,6 +254,7 @@ class ResourceService {
             categoryId: resource.category_id,
             tags: resource.tags,
             vipLevel: resource.vip_level,
+            pricingType: resource.pricing_type ?? 0,
             format: resource.file_format,
             downloadCount: resource.download_count,
             viewCount: resource.view_count,
@@ -249,14 +266,37 @@ class ResourceService {
             createTime: resource.created_at.toISOString(),
           };
 
+          // 根据定价类型设置积分价格
+          const pricingType = resource.pricing_type ?? 0;
           if (userId) {
             if (isVip) {
+              // VIP用户所有资源免费
               item.pointsCost = 0;
               item.isFree = true;
+            } else if (pricingType === 0) {
+              // 免费资源
+              item.pointsCost = 0;
+              item.isFree = true;
+            } else if (pricingType === 1) {
+              // 付费积分资源
+              item.pointsCost = resource.points_cost ?? 0;
+              item.isFree = false;
+            } else if (pricingType === 2) {
+              // VIP专属资源
+              item.pointsCost = 0;
+              item.isFree = false;
             } else {
+              // 兼容旧数据
               const pointsCost = await getResourcePointsCost(resource.vip_level);
               item.pointsCost = pointsCost;
               item.isFree = pointsCost === 0;
+            }
+          } else {
+            // 未登录用户也显示积分信息
+            if (pricingType === 1) {
+              item.pointsCost = resource.points_cost ?? 0;
+            } else {
+              item.pointsCost = 0;
             }
           }
 
@@ -285,6 +325,8 @@ class ResourceService {
     categoryId: string;
     tags?: string[];
     vipLevel?: number;
+    pricingType?: number;
+    pointsCost?: number;
     userId: string;
     file: Express.Multer.File;
     previewImages?: Express.Multer.File[];
@@ -296,6 +338,8 @@ class ResourceService {
         categoryId,
         tags = [],
         vipLevel = 0,
+        pricingType = 0,
+        pointsCost = 0,
         userId,
         file,
         previewImages = [],
@@ -307,6 +351,14 @@ class ResourceService {
 
       if (!category) {
         throw new Error('分类不存在');
+      }
+
+      // 解码文件名（处理中文等特殊字符，multer 使用 latin1 编码）
+      let decodedFileName: string;
+      try {
+        decodedFileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      } catch {
+        decodedFileName = file.originalname;
       }
 
       const fileUrl = `/uploads/${file.filename}`;
@@ -326,21 +378,21 @@ class ResourceService {
         const extractResult = await previewExtractorService.extractPreview(
           filePath,
           fileUrl,
-          file.originalname,
+          decodedFileName,
           file.mimetype
         );
 
         if (extractResult.success && extractResult.cover) {
           cover = extractResult.cover;
           previewImageUrls = extractResult.previewImages;
-          logger.info(`自动提取预览图成功: ${file.originalname}`);
+          logger.info(`自动提取预览图成功: ${decodedFileName}`);
         } else if (extractResult.error) {
           logger.warn(`预览图提取提示: ${extractResult.error}`);
         }
       }
 
       // 获取文件格式
-      const fileFormat = previewExtractorService.getFileFormat(file.originalname, file.mimetype);
+      const fileFormat = previewExtractorService.getFileFormat(decodedFileName, file.mimetype);
 
       const resource = await prisma.resources.create({
         data: {
@@ -348,13 +400,15 @@ class ResourceService {
           description,
           cover,
           file_url: fileUrl,
-          file_name: file.originalname,
+          file_name: decodedFileName,
           file_size: BigInt(file.size),
           file_format: fileFormat,
           preview_images: previewImageUrls,
           category_id: categoryId,
           tags,
           vip_level: vipLevel,
+          pricing_type: pricingType,
+          points_cost: pointsCost,
           user_id: userId,
           audit_status: 0,
           status: 1,
@@ -367,6 +421,7 @@ class ResourceService {
         resourceId: resource.resource_id,
         title: resource.title,
         auditStatus: resource.audit_status,
+        isAudit: resource.audit_status,
         createdAt: resource.created_at,
       };
     } catch (err) {
@@ -429,6 +484,8 @@ class ResourceService {
         categoryName: resource.categories?.category_name || '', // 兼容前端字段
         tags: resource.tags,
         vipLevel: resource.vip_level,
+        pricingType: resource.pricing_type, // 定价类型
+        pointsCost: resource.points_cost, // 积分价格
         downloadCount: resource.download_count,
         viewCount: resource.view_count + 1,
         likeCount: resource.like_count,
@@ -444,14 +501,32 @@ class ResourceService {
         uploaderName: resource.users_resources_user_idTousers?.nickname || '', // 兼容前端字段
       };
 
+      // 根据定价类型和用户身份计算实际积分消耗
       if (userId) {
         if (isVip) {
-          detail.pointsCost = 0;
+          // VIP用户免费下载
+          detail.actualPointsCost = 0;
           detail.isFree = true;
         } else {
-          const pointsCost = await getResourcePointsCost(resource.vip_level);
-          detail.pointsCost = pointsCost;
-          detail.isFree = pointsCost === 0;
+          // 普通用户根据定价类型判断
+          if (resource.pricing_type === 0) {
+            // 免费资源
+            detail.actualPointsCost = 0;
+            detail.isFree = true;
+          } else if (resource.pricing_type === 1) {
+            // 付费积分资源
+            detail.actualPointsCost = resource.points_cost;
+            detail.isFree = false;
+          } else if (resource.pricing_type === 2) {
+            // VIP专属资源，普通用户无法下载
+            detail.actualPointsCost = 0;
+            detail.isFree = false;
+          } else {
+            // 兼容旧数据：根据vip_level计算
+            const pointsCost = await getResourcePointsCost(resource.vip_level);
+            detail.actualPointsCost = pointsCost;
+            detail.isFree = pointsCost === 0;
+          }
         }
       }
 
@@ -481,6 +556,24 @@ class ResourceService {
 
       if (resource.status !== 1) {
         throw new Error('资源已下架');
+      }
+
+      // 先检查文件是否存在（在扣积分之前）
+      const downloadUrl = resource.file_url;
+      if (downloadUrl) {
+        // 将URL路径转换为文件系统路径
+        let filePath = '';
+        if (downloadUrl.startsWith('/uploads/')) {
+          filePath = path.join(process.cwd(), downloadUrl);
+        } else if (downloadUrl.startsWith('/files/')) {
+          filePath = path.join(process.cwd(), downloadUrl);
+        }
+        
+        // 如果是本地文件路径，检查文件是否存在
+        if (filePath && !fs.existsSync(filePath)) {
+          logger.warn(`下载文件不存在: ${filePath}`);
+          throw new Error('资源文件不存在或已被删除，请联系管理员');
+        }
       }
 
       let pointsCost = 0;
@@ -580,8 +673,6 @@ class ResourceService {
           }
         }
       }
-
-      const downloadUrl = resource.file_url;
 
       return {
         downloadUrl,
@@ -708,6 +799,8 @@ class ResourceService {
     categoryId: string;
     tags?: string[];
     vipLevel?: number;
+    pricingType?: number;
+    pointsCost?: number;
   }) {
     try {
       const {
@@ -718,6 +811,8 @@ class ResourceService {
         categoryId,
         tags = [],
         vipLevel = 0,
+        pricingType = 0,
+        pointsCost = 0,
       } = data;
 
       // 1. 获取分片上传会话信息
@@ -808,6 +903,8 @@ class ResourceService {
           category_id: categoryId,
           tags,
           vip_level: vipLevel,
+          pricing_type: pricingType,
+          points_cost: pointsCost,
           user_id: userId,
           audit_status: 0, // 待审核
           status: 1, // 正常状态

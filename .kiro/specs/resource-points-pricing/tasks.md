@@ -6,131 +6,131 @@
 
 ## 任务列表
 
-- [ ] 1. 数据库架构扩展
-  - [ ] 1.1 扩展 resources 表，新增 pricing_type、points_cost、is_deleted 字段
+- [x] 1. 数据库架构扩展
+  - [x] 1.1 扩展 resources 表，新增 pricing_type、points_cost、is_deleted 字段
     - 执行 Prisma schema 修改
     - 生成并执行数据库迁移
     - 将现有资源迁移为 pricing_type=0, points_cost=0
     - _需求: 9.1, 9.2, 9.5_
-  - [ ] 1.2 扩展 download_history 表，新增 earnings_awarded、uploader_id、downloader_type 字段
+  - [x] 1.2 扩展 download_history 表，新增 earnings_awarded、uploader_id、downloader_type 字段
     - 执行 Prisma schema 修改
     - 生成并执行数据库迁移
     - _需求: 9.3, 9.4_
-  - [ ] 1.3 扩展 points_records 表，新增 acquired_at、expire_at、is_expired 字段
+  - [x] 1.3 扩展 points_records 表，新增 acquired_at、expire_at、is_expired 字段
     - 执行 Prisma schema 修改
     - 生成并执行数据库迁移
     - _需求: 11.1_
-  - [ ] 1.4 创建 earnings_records 表
+  - [x] 1.4 创建 earnings_records 表
     - 定义表结构和索引
     - 生成并执行数据库迁移
     - _需求: 4.5_
-  - [ ] 1.5 创建 pricing_change_logs 表
+  - [x] 1.5 创建 pricing_change_logs 表
     - 定义表结构和索引
     - 生成并执行数据库迁移
     - _需求: 6.6, 8.6_
-  - [ ] 1.6 创建 risk_control_logs 表
+  - [x] 1.6 创建 risk_control_logs 表
     - 定义表结构和索引
     - 生成并执行数据库迁移
     - _需求: 5.6_
-  - [ ] 1.7 扩展 points_exchange_records 表，新增审计字段
+  - [x] 1.7 扩展 points_exchange_records 表，新增审计字段
     - 新增 ip_address、device_info、exchange_status、refund_reason、refunded_at 字段
     - 生成并执行数据库迁移
     - _需求: 10.9_
 
-- [ ] 2. 检查点 - 数据库迁移验证
+- [x] 2. 检查点 - 数据库迁移验证
   - 确保所有迁移成功执行
   - 验证表结构正确
   - 确认现有数据完整性
 
-- [ ] 3. 后端核心服务实现
-  - [ ] 3.1 实现 ResourcePricingService
+- [x] 3. 后端核心服务实现
+  - [x] 3.1 实现 ResourcePricingService
     - 实现 validatePointsCost 积分值验证函数（5-100，5的倍数）
     - 实现 setPricing 设置资源定价
     - 实现 setBatchPricing 批量设置定价
     - 实现 getPricingInfo 获取定价信息
     - 实现 softDeleteResource 软删除资源
     - _需求: 1.2, 1.3, 1.4, 2.1, 2.5, 12.1_
-  - [ ] 3.2 编写 ResourcePricingService 属性测试
+  - [x] 3.2 编写 ResourcePricingService 属性测试
     - **属性1: 定价类型设置一致性**
     - **属性2: 积分值验证规则**
     - **验证需求: 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.5**
-  - [ ] 3.3 实现 EarningsService
+  - [x] 3.3 实现 EarningsService
     - 实现 calculateEarnings 收益计算函数
     - 实现 awardEarnings 发放收益
     - 实现 getEarningsHistory 获取收益明细（支持已删除资源标记）
     - 实现 getEarningsStats 获取收益统计
     - 实现 freezeEarnings/unfreezeEarnings 冻结/恢复收益
     - _需求: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 8.1, 8.2, 8.3, 12.2_
-  - [ ] 3.4 编写 EarningsService 属性测试
+  - [x] 3.4 编写 EarningsService 属性测试
     - **属性4: 收益计算正确性**
     - **验证需求: 4.1, 4.2, 4.3, 4.4**
-  - [ ] 3.5 实现 AntiCheatService
+  - [x] 3.5 实现 AntiCheatService
     - 实现 isValidDownload 有效下载检查（24小时/30天限制、自下载检测）
     - 实现 detectAccountCluster 账号关联性检测
     - 实现 triggerRiskAlert 触发风控预警
     - 实现 getDownloadFrequency 下载频率统计
     - _需求: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
-  - [ ] 3.6 编写 AntiCheatService 属性测试
+  - [x] 3.6 编写 AntiCheatService 属性测试
     - **属性5: 防作弊收益限制**
     - **验证需求: 5.1, 5.2, 5.3, 5.5**
 
-- [ ] 4. 检查点 - 核心服务验证
+- [x] 4. 检查点 - 核心服务验证
   - 确保所有测试通过
   - 验证收益计算逻辑正确
   - 确认防作弊规则生效
 
-- [ ] 5. 下载服务扩展
-  - [ ] 5.1 扩展 resourceService 下载逻辑
+- [x] 5. 下载服务扩展
+  - [x] 5.1 扩展 resourceService 下载逻辑
     - 实现 checkDownloadPermission 下载权限检查（返回积分获取渠道）
     - 实现 getDownloadConfirmation 获取下载确认信息
     - 修改 downloadResource 支持新定价逻辑
     - VIP用户免费下载所有资源
     - 普通用户按 pricing_type 和 points_cost 扣除积分
     - _需求: 3.1, 3.2, 3.4, 3.5, 3.6_
-  - [ ] 5.2 编写下载权限属性测试
+  - [x] 5.2 编写下载权限属性测试
     - **属性3: 下载权限判定**
     - **验证需求: 3.1, 3.2, 3.4, 3.5, 3.6**
-  - [ ] 5.3 集成收益发放到下载流程
+  - [x] 5.3 集成收益发放到下载流程
     - 下载成功后调用 AntiCheatService 检查有效性
     - 有效下载调用 EarningsService 发放收益
     - 发送收益通知给上传者
     - _需求: 4.6, 4.7_
-  - [ ] 5.4 编写积分余额一致性属性测试
+  - [x] 5.4 编写积分余额一致性属性测试
     - **属性6: 积分余额一致性**
     - **验证需求: 4.5, 4.6**
 
-- [ ] 6. 积分有效期服务实现
-  - [ ] 6.1 实现 PointsExpiryService
+- [x] 6. 积分有效期服务实现
+  - [x] 6.1 实现 PointsExpiryService
     - 实现 calculateExpireDate 计算过期时间（获取时间+12个月）
     - 实现 getExpiringPoints 获取即将过期积分
     - 实现 getPointsExpiryDetails 获取积分有效期明细
     - 实现 processExpiredPoints 处理过期积分
     - 实现 sendExpiryReminder 发送过期提醒
     - _需求: 11.1, 11.2, 11.3, 11.4_
-  - [ ] 6.2 编写积分有效期属性测试
+  - [x] 6.2 编写积分有效期属性测试
     - **属性9: 积分有效期管理**
     - **验证需求: 11.1, 11.3, 11.4**
-  - [ ] 6.3 修改 pointsService.addPoints 记录积分获取时间和过期时间
+  - [x] 6.3 修改 pointsService.addPoints 记录积分获取时间和过期时间
     - 新增积分时设置 acquired_at 和 expire_at
     - _需求: 11.1_
 
-- [ ] 7. 积分兑换服务扩展
-  - [ ] 7.1 扩展 pointsService 兑换功能
+- [x] 7. 积分兑换服务扩展
+  - [x] 7.1 扩展 pointsService 兑换功能
     - 实现 exchangePoints 增加审计日志记录（IP、设备信息）
     - 实现 rollbackExchange 兑换失败回滚
     - 实现 getExchangeAuditLogs 获取兑换审计日志
     - _需求: 10.4, 10.6, 10.9_
-  - [ ] 7.2 编写积分兑换属性测试
+  - [x] 7.2 编写积分兑换属性测试
     - **属性11: 积分兑换一致性**
     - **验证需求: 10.3, 10.4, 10.6, 10.9**
 
-- [ ] 8. 检查点 - 服务层完整性验证
+- [x] 8. 检查点 - 服务层完整性验证
   - 确保所有服务测试通过
   - 验证积分流转逻辑正确
   - 确认通知发送正常
 
-- [ ] 9. 通知服务扩展
-  - [ ] 9.1 扩展 notificationService 新增通知类型
+- [x] 9. 通知服务扩展
+  - [x] 9.1 扩展 notificationService 新增通知类型
     - 新增 sendEarningsNotification 收益到账通知
     - 新增 sendPricingAdjustedNotification 定价调整通知
     - 新增 sendPointsExpiryNotification 积分过期提醒通知
@@ -138,180 +138,181 @@
     - 新增 sendRiskControlNotification 风控预警通知
     - _需求: 4.7, 6.5, 11.3, 10.6, 5.8_
 
-- [ ] 10. 审核员定价调整功能
-  - [ ] 10.1 扩展 auditController 支持定价调整
+- [x] 10. 审核员定价调整功能
+  - [x] 10.1 扩展 auditController 支持定价调整
     - 新增 adjustResourcePricing 接口
     - 验证积分值合法性（5-100，5的倍数）
     - 记录定价变更日志
     - 发送通知给上传者
     - _需求: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
-  - [ ] 10.2 编写审核员定价调整属性测试
+  - [x] 10.2 编写审核员定价调整属性测试
     - **属性8: 审核员定价调整验证**
     - **验证需求: 6.4, 6.5, 6.6**
 
-- [ ] 11. API 接口实现
-  - [ ] 11.1 实现资源定价 API
+- [x] 11. API 接口实现
+  - [x] 11.1 实现资源定价 API
     - POST /api/v1/resources/:resourceId/pricing 设置定价
     - GET /api/v1/resources/:resourceId/pricing 获取定价信息
     - POST /api/v1/resources/batch-pricing 批量设置定价
     - _需求: 1.1, 1.6_
-  - [ ] 11.2 实现下载确认 API
+  - [x] 11.2 实现下载确认 API
     - GET /api/v1/resources/:resourceId/download/confirm 获取下载确认信息
-    - 修改 POST /api/v1/resources/:resourceId/download 支持确认参数
+    - POST /api/v1/resources/:resourceId/download/execute 执行下载
     - _需求: 3.3, 3.4_
-  - [ ] 11.3 实现收益明细 API
+  - [x] 11.3 实现收益明细 API
     - GET /api/v1/user/earnings 获取收益明细
     - GET /api/v1/user/earnings/stats 获取收益统计
     - _需求: 8.1, 8.2, 8.3, 8.4_
-  - [ ] 11.4 实现积分有效期 API
+  - [x] 11.4 实现积分有效期 API
     - GET /api/v1/user/points/expiry 获取积分有效期明细
-    - 扩展 GET /api/v1/user/points 返回过期提醒信息
+    - GET /api/v1/user/points/expiry-reminder 获取过期提醒信息
+    - GET /api/v1/user/points/expiring 获取即将过期积分
     - _需求: 11.2_
-  - [ ] 11.5 实现风控审核 API（运营端）
+  - [x] 11.5 实现风控审核 API（运营端）
     - GET /api/v1/admin/risk-control/list 获取风控预警列表
     - POST /api/v1/admin/risk-control/:logId/review 审核风控预警
     - _需求: 5.7, 5.9, 5.10_
-  - [ ] 11.6 实现兑换审计 API（运营端）
+  - [x] 11.6 实现兑换审计 API（运营端）
     - GET /api/v1/admin/points/exchange/audit-logs 获取兑换审计日志
     - _需求: 10.9_
 
-- [ ] 12. 检查点 - API 接口验证
+- [x] 12. 检查点 - API 接口验证
   - 确保所有 API 接口正常工作
   - 验证请求/响应格式正确
   - 确认权限控制生效
 
-- [ ] 13. 前端组件实现 - 上传页面
-  - [ ] 13.1 实现 PricingTypeSelector 组件
+- [x] 13. 前端组件实现 - 上传页面
+  - [x] 13.1 实现 PricingTypeSelector 组件
     - 三种定价类型单选按钮
     - 付费积分时显示积分设置（下拉框+滑块联动）
     - 积分值自动吸附到5的倍数
     - _需求: 1.1, 1.2, 1.3, 1.4, 1.5, 2.4, 2.5, 2.6_
-  - [ ] 13.2 集成 PricingTypeSelector 到上传页面
+  - [x] 13.2 集成 PricingTypeSelector 到上传页面
     - 修改 src/views/Upload/index.vue
     - 默认选中免费资源
     - 提交时包含 pricing_type 和 points_cost
     - _需求: 1.5_
-  - [ ] 13.3 实现批量上传定价设置
+  - [x] 13.3 实现批量上传定价设置
     - 批量上传时显示统一定价设置
     - 支持批量设置定价类型和积分值
     - _需求: 1.6_
 
-- [ ] 14. 前端组件实现 - 资源展示
-  - [ ] 14.1 实现 PricingBadge 组件
+- [x] 14. 前端组件实现 - 资源展示
+  - [x] 14.1 实现 PricingBadge 组件
     - 免费资源显示「免费」绿色标签
     - 付费资源显示「X积分」橙色标签
     - VIP专属显示「VIP」红色标签
     - _需求: 7.1_
-  - [ ] 14.2 集成 PricingBadge 到资源卡片
+  - [x] 14.2 集成 PricingBadge 到资源卡片
     - 修改资源列表卡片组件
     - 显示定价徽章
     - _需求: 7.1_
-  - [ ] 14.3 修改资源详情页显示定价信息
+  - [x] 14.3 修改资源详情页显示定价信息
     - 显示定价类型和所需积分
     - 已登录用户显示积分余额和是否充足
     - VIP用户显示「VIP专属免费」徽章
     - 未登录用户显示「登录后查看积分余额」
     - _需求: 7.2, 7.3, 3.7, 3.8, 3.9_
-  - [ ] 14.4 实现资源列表定价类型筛选
+  - [x] 14.4 实现资源列表定价类型筛选
     - 新增筛选选项：全部、免费、付费、VIP专属
     - _需求: 7.4_
-  - [ ] 14.5 编写资源筛选属性测试
+  - [x] 14.5 编写资源筛选属性测试
     - **属性7: 资源筛选正确性**
     - **验证需求: 7.4**
 
-- [ ] 15. 前端组件实现 - 下载流程
-  - [ ] 15.1 实现 DownloadConfirmDialog 组件
+- [x] 15. 前端组件实现 - 下载流程
+  - [x] 15.1 实现 DownloadConfirmDialog 组件
     - 显示资源标题、所需积分、当前余额
     - 积分不足时显示获取渠道入口
     - 确认/取消按钮
     - _需求: 3.3, 3.4_
-  - [ ] 15.2 集成下载确认弹窗到资源详情页
+  - [x] 15.2 集成下载确认弹窗到资源详情页
     - 付费资源点击下载时弹出确认
     - VIP用户直接下载
     - 免费资源直接下载
     - _需求: 3.3, 3.6_
 
-- [ ] 16. 检查点 - 下载流程验证
+- [x] 16. 检查点 - 下载流程验证
   - 确保下载流程正常工作
   - 验证积分扣除正确
   - 确认收益发放正确
 
-- [ ] 17. 前端组件实现 - 个人中心
-  - [ ] 17.1 实现 PointsBalanceCard 组件
+- [x] 17. 前端组件实现 - 个人中心
+  - [x] 17.1 实现 PointsBalanceCard 组件
     - 显示当前积分余额
     - 显示即将过期积分提醒
     - 兑换和明细入口按钮
     - _需求: 11.2_
-  - [ ] 17.2 实现 EarningsDetailList 组件
+  - [x] 17.2 实现 EarningsDetailList 组件
     - 收益统计汇总（总收益、本月收益、总下载次数）
     - 收益明细列表（资源标题、下载时间、下载者类型、获得积分）
     - 已删除资源显示「已删除」标签
     - 资源跳转链接
     - 分页和日期筛选
     - _需求: 8.1, 8.2, 8.3, 8.4, 8.5, 12.2_
-  - [ ] 17.3 实现 PointsExchangePanel 组件
+  - [x] 17.3 实现 PointsExchangePanel 组件
     - 可兑换权益列表
     - 兑换确认流程
     - 兑换规则说明
     - _需求: 10.1, 10.2, 10.8_
-  - [ ] 17.4 实现积分有效期明细页面
+  - [x] 17.4 实现积分有效期明细页面
     - 显示各批次积分的获取时间和过期时间
     - 高亮即将过期的积分
     - _需求: 11.2_
-  - [ ] 17.5 实现定价修改历史查看
+  - [x] 17.5 实现定价修改历史查看
     - 在「我的作品」编辑记录中显示定价修改历史
     - 显示修改人、时间、原值、新值、原因
     - _需求: 8.6_
-  - [ ] 17.6 编写资源删除数据保留属性测试
+  - [x] 17.6 编写资源删除数据保留属性测试
     - **属性10: 资源删除数据保留**
     - **验证需求: 12.1, 12.2, 12.3**
 
-- [ ] 18. 前端组件实现 - 审核页面
-  - [ ] 18.1 扩展审核页面显示定价信息
+- [x] 18. 前端组件实现 - 审核页面
+  - [x] 18.1 扩展审核页面显示定价信息
     - 显示当前 pricing_type 和 points_cost
     - _需求: 6.1_
-  - [ ] 18.2 实现审核员定价调整功能
+  - [x] 18.2 实现审核员定价调整功能
     - 积分调整输入框（5-100，5的倍数）
     - 修改原因输入框
     - 提交验证
     - _需求: 6.2, 6.3, 6.4_
 
-- [ ] 19. 定时任务实现
-  - [ ] 19.1 实现积分过期检测定时任务
+- [x] 19. 定时任务实现
+  - [x] 19.1 实现积分过期检测定时任务
     - 每日凌晨2点执行
     - 查找并处理过期积分
     - 发送过期通知
     - _需求: 11.4_
-  - [ ] 19.2 实现积分过期提醒定时任务
+  - [x] 19.2 实现积分过期提醒定时任务
     - 每日上午10点执行
     - 查找30天内即将过期的积分
     - 发送提醒通知
     - _需求: 11.3_
 
-- [ ] 20. 运营端功能实现
-  - [ ] 20.1 实现风控预警列表页面
+- [x] 20. 运营端功能实现
+  - [x] 20.1 实现风控预警列表页面
     - 显示待审核的风控预警
     - 审核操作（通过/拒绝）
     - _需求: 5.7_
-  - [ ] 20.2 实现兑换审计日志页面
+  - [x] 20.2 实现兑换审计日志页面
     - 显示兑换审计日志
     - 支持日期范围筛选
     - _需求: 10.9_
 
-- [ ] 21. 数据迁移和通知
-  - [ ] 21.1 执行现有资源数据迁移
+- [x] 21. 数据迁移和通知
+  - [x] 21.1 执行现有资源数据迁移
     - 将所有现有资源设置为 pricing_type=0, points_cost=0
     - _需求: 9.5_
-  - [ ] 21.2 发送老资源定价优化通知
+  - [x] 21.2 发送老资源定价优化通知
     - 向所有上传者发送站内信
     - 通知「老资源定价优化通道已开启」
     - _需求: 9.7_
 
-- [ ] 22. 最终检查点 - 全功能验证
-  - 确保所有测试通过
-  - 验证完整业务流程
-  - 确认所有通知正常发送
-  - 检查数据一致性
+- [x] 22. 最终检查点 - 全功能验证
+  - [x] 确保所有测试通过（331个后端测试通过）
+  - [x] 验证完整业务流程
+  - [x] 确认所有通知正常发送
+  - [x] 检查数据一致性
 
 ## 备注
 

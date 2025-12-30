@@ -51,8 +51,8 @@
                 size="small"
                 @change="handleModeChange(recommend)"
               >
-                <el-radio-button label="auto">自动推荐</el-radio-button>
-                <el-radio-button label="manual">手动选择</el-radio-button>
+                <el-radio-button value="auto">自动推荐</el-radio-button>
+                <el-radio-button value="manual">手动选择</el-radio-button>
               </el-radio-group>
             </div>
 

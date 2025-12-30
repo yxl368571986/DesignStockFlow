@@ -40,13 +40,22 @@
             <el-image
               :src="row.imageUrl"
               :preview-src-list="[row.imageUrl]"
+              :preview-teleported="true"
+              :hide-on-click-modal="true"
+              :z-index="3000"
               fit="cover"
               class="banner-preview"
+              lazy
             >
               <template #error>
                 <div class="image-error">
                   <el-icon><Picture /></el-icon>
                   <span>加载失败</span>
+                </div>
+              </template>
+              <template #placeholder>
+                <div class="image-loading">
+                  <el-icon class="is-loading"><Loading /></el-icon>
                 </div>
               </template>
             </el-image>
@@ -254,7 +263,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Plus, Edit, Delete, Picture, Link, View, WarningFilled, SuccessFilled, InfoFilled } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Picture, Link, View, WarningFilled, SuccessFilled, InfoFilled, Loading } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
 import {
   getAdminBannerList,
@@ -340,7 +349,7 @@ const formRules: FormRules = {
 
 // 上传配置
 const uploadAction = computed(() => {
-  return `${import.meta.env.VITE_API_BASE_URL}/api/v1/upload/image`;
+  return `${import.meta.env.VITE_API_BASE_URL}/upload/image`;
 });
 
 const uploadHeaders = computed(() => {
@@ -665,7 +674,14 @@ const handleSubmit = async () => {
 // 图片上传成功
 const handleUploadSuccess = (response: any) => {
   if (response.code === 200) {
-    formData.imageUrl = response.data.url;
+    // 将相对路径转换为完整URL
+    const imageUrl = response.data.url;
+    // 如果是相对路径，添加后端服务器地址
+    if (imageUrl.startsWith('/')) {
+      formData.imageUrl = `${import.meta.env.VITE_CDN_BASE_URL}${imageUrl}`;
+    } else {
+      formData.imageUrl = imageUrl;
+    }
     ElMessage.success('图片上传成功');
   } else {
     ElMessage.error(response.msg || '图片上传失败');
@@ -815,6 +831,21 @@ onMounted(() => {
       .el-icon {
         font-size: 24px;
         margin-bottom: 4px;
+      }
+    }
+
+    .image-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 180px;
+      height: 60px;
+      background: #f5f7fa;
+      border-radius: 4px;
+      color: #165dff;
+
+      .el-icon {
+        font-size: 24px;
       }
     }
 

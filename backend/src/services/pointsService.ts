@@ -292,10 +292,45 @@ export async function getPointsProducts(options: {
       stock: product.stock,
       imageUrl: product.image_url,
       description: product.description,
+      status: product.status,
     })),
     total,
     page,
     pageSize,
+  };
+}
+
+/**
+ * 获取单个积分商品详情
+ */
+export async function getPointsProductById(productId: string) {
+  const product = await prisma.points_products.findUnique({
+    where: { product_id: productId },
+  });
+
+  if (!product) {
+    return null;
+  }
+
+  // 获取该商品的兑换次数
+  const exchangeCount = await prisma.points_exchange_records.count({
+    where: { product_id: productId },
+  });
+
+  return {
+    productId: product.product_id,
+    productName: product.product_name,
+    productType: product.product_type,
+    productCode: product.product_code,
+    pointsRequired: product.points_required,
+    productValue: product.product_value,
+    stock: product.stock,
+    imageUrl: product.image_url,
+    description: product.description,
+    status: product.status,
+    exchangeCount,
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
   };
 }
 

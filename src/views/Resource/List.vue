@@ -47,6 +47,7 @@ const filters = ref({
   categoryId: undefined as string | undefined,
   format: undefined as string | undefined,
   vipLevel: undefined as number | undefined,
+  pricingType: undefined as number | undefined,
   sortType: 'comprehensive' as 'comprehensive' | 'download' | 'latest' | 'like' | 'collect'
 });
 
@@ -79,6 +80,16 @@ const vipLevelOptions = [
   { label: '全部资源', value: -1 },
   { label: '免费资源', value: 0 },
   { label: 'VIP资源', value: 1 }
+];
+
+/**
+ * 定价类型选项
+ */
+const pricingTypeOptions = [
+  { label: '全部', value: -1 },
+  { label: '免费', value: 0 },
+  { label: '付费积分', value: 1 },
+  { label: 'VIP专属', value: 2 }
 ];
 
 /**
@@ -162,6 +173,7 @@ const hasFilters = computed(() => {
     filters.value.categoryId ||
     filters.value.format ||
     filters.value.vipLevel !== undefined ||
+    filters.value.pricingType !== undefined ||
     resourceStore.searchParams.keyword
   );
 });
@@ -198,12 +210,16 @@ function saveSortPreference(sortType: 'comprehensive' | 'download' | 'latest' | 
  * 从URL参数初始化筛选条件
  */
 function initFiltersFromURL() {
-  const { categoryId, category, format, vip, sort, page, keyword } = route.query;
+  const { categoryId, category, format, vip, pricingType, pricing_type, sort, page, keyword } = route.query;
 
   // 设置筛选条件（兼容 categoryId 和 category 两种参数名）
   filters.value.categoryId = (categoryId || category) as string | undefined;
   filters.value.format = format as string | undefined;
   filters.value.vipLevel = vip ? Number(vip) : undefined;
+  
+  // 定价类型筛选（兼容 pricingType 和 pricing_type 两种参数名）
+  const actualPricingType = pricingType || pricing_type;
+  filters.value.pricingType = actualPricingType ? Number(actualPricingType) : undefined;
   
   // 排序方式：优先使用URL参数，其次使用localStorage，最后使用默认值
   if (sort && ['comprehensive', 'download', 'latest', 'like', 'collect'].includes(sort as string)) {
@@ -218,6 +234,7 @@ function initFiltersFromURL() {
       categoryId: filters.value.categoryId,
       format: filters.value.format,
       vipLevel: filters.value.vipLevel,
+      pricingType: filters.value.pricingType,
       sortType: filters.value.sortType,
       pageNum: page ? Number(page) : 1,
       keyword: keyword as string | undefined
@@ -240,6 +257,9 @@ function updateURL() {
   }
   if (filters.value.vipLevel !== undefined) {
     query.vip = String(filters.value.vipLevel);
+  }
+  if (filters.value.pricingType !== undefined) {
+    query.pricingType = String(filters.value.pricingType);
   }
   if (filters.value.sortType !== 'comprehensive') {
     query.sort = filters.value.sortType;
@@ -287,6 +307,17 @@ function handleVipLevelChange(vipLevel: number | undefined) {
 }
 
 /**
+ * 处理定价类型变化
+ */
+function handlePricingTypeChange(pricingType: number | undefined) {
+  // -1表示"全部"，转换为undefined
+  const actualPricingType = pricingType === -1 ? undefined : pricingType;
+  filters.value.pricingType = actualPricingType;
+  resourceStore.setPricingType(actualPricingType);
+  updateURL();
+}
+
+/**
  * 处理排序变化
  */
 function handleSortChange(sortType: 'comprehensive' | 'download' | 'latest' | 'like' | 'collect') {
@@ -303,7 +334,6 @@ function handleSortChange(sortType: 'comprehensive' | 'download' | 'latest' | 'l
  * 处理资源卡片点击
  */
 function handleResourceClick(resourceId: string) {
-  console.log('点击资源:', resourceId);
   // ResourceCard组件内部已处理跳转
 }
 
@@ -311,7 +341,6 @@ function handleResourceClick(resourceId: string) {
  * 处理下载
  */
 function handleDownload(resourceId: string) {
-  console.log('下载资源:', resourceId);
   // TODO: 实现下载逻辑（在后续任务中实现）
 }
 
@@ -482,6 +511,24 @@ watch(
             >
               <el-option
                 v-for="option in vipLevelOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
+
+          <!-- 定价类型筛选 -->
+          <div class="filter-item">
+            <label class="filter-label">定价：</label>
+            <el-select
+              :model-value="filters.pricingType ?? -1"
+              placeholder="选择定价"
+              clearable
+              @change="handlePricingTypeChange"
+            >
+              <el-option
+                v-for="option in pricingTypeOptions"
                 :key="option.value"
                 :label="option.label"
                 :value="option.value"

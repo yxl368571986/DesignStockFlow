@@ -51,6 +51,12 @@
               刷新
             </button>
             <button
+              class="action-btn mall-btn"
+              @click="goToMall"
+            >
+              积分商城
+            </button>
+            <button
               class="action-btn recharge-btn"
               @click="handleRecharge"
             >
@@ -333,6 +339,13 @@ function goBack() {
 }
 
 /**
+ * 跳转到积分商城
+ */
+function goToMall() {
+  router.push('/points/mall');
+}
+
+/**
  * 获取积分记录
  */
 async function fetchRecords() {
@@ -598,6 +611,15 @@ onActivated(() => {
   color: #fff;
 
   &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.action-btn.mall-btn {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+
+  &:hover {
     background: rgba(255, 255, 255, 0.4);
   }
 }

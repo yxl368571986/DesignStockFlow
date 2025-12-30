@@ -113,19 +113,28 @@ model daily_tasks {
 }
 
 model download_history {
-  download_id String     @id @default(uuid()) @db.VarChar(36)
-  user_id     String?    @db.VarChar(36)
-  resource_id String?    @db.VarChar(36)
-  points_cost Int        @default(0)
-  ip_address  String?    @db.VarChar(50)
-  user_agent  String?
-  created_at  DateTime   @default(now()) @db.Timestamp(6)
-  resources   resources? @relation(fields: [resource_id], references: [resource_id])
-  users       users?     @relation(fields: [user_id], references: [user_id])
+  download_id      String     @id @default(uuid()) @db.VarChar(36)
+  user_id          String?    @db.VarChar(36)
+  resource_id      String?    @db.VarChar(36)
+  points_cost      Int        @default(0)
+  ip_address       String?    @db.VarChar(50)
+  user_agent       String?
+  created_at       DateTime   @default(now()) @db.Timestamp(6)
+  // 积分定价功能扩展字段
+  earnings_awarded Boolean    @default(false)  // 是否已发放收益
+  uploader_id      String?    @db.VarChar(36)  // 上传者ID（冗余字段，便于查询）
+  downloader_type  String?    @db.VarChar(20)  // 下载者类型: 'normal' | 'vip'
+  
+  resources        resources? @relation(fields: [resource_id], references: [resource_id])
+  users            users?     @relation(fields: [user_id], references: [user_id])
+  // 积分定价功能关联
+  earnings_records earnings_records[]
 
   @@index([created_at(sort: Desc)])
   @@index([resource_id])
   @@index([user_id])
+  @@index([uploader_id])
+  @@index([earnings_awarded])
 }
 
 model orders {
@@ -182,11 +191,19 @@ model points_exchange_records {
   tracking_number  String?          @db.VarChar(100)
   created_at       DateTime         @default(now()) @db.Timestamp(6)
   updated_at       DateTime         @default(now()) @db.Timestamp(6)
+  // 积分定价功能审计字段
+  ip_address       String?          @db.VarChar(50)
+  device_info      String?
+  exchange_status  String           @default("success") @db.VarChar(20)  // 'success' | 'failed' | 'refunded'
+  refund_reason    String?
+  refunded_at      DateTime?        @db.Timestamp(6)
+  
   points_products  points_products? @relation(fields: [product_id], references: [product_id])
   users            users?           @relation(fields: [user_id], references: [user_id])
 
   @@index([delivery_status])
   @@index([user_id])
+  @@index([exchange_status])
 }
 
 model points_products {
@@ -210,20 +227,27 @@ model points_products {
 }
 
 model points_records {
-  record_id      String   @id @default(uuid()) @db.VarChar(36)
-  user_id        String?  @db.VarChar(36)
+  record_id      String    @id @default(uuid()) @db.VarChar(36)
+  user_id        String?   @db.VarChar(36)
   points_change  Int
   points_balance Int
-  change_type    String   @db.VarChar(20)
-  source         String   @db.VarChar(50)
-  source_id      String?  @db.VarChar(36)
+  change_type    String    @db.VarChar(20)
+  source         String    @db.VarChar(50)
+  source_id      String?   @db.VarChar(36)
   description    String?
-  created_at     DateTime @default(now()) @db.Timestamp(6)
-  users          users?   @relation(fields: [user_id], references: [user_id])
+  created_at     DateTime  @default(now()) @db.Timestamp(6)
+  // 积分有效期管理扩展字段
+  acquired_at    DateTime? @db.Timestamp(6)  // 积分获取时间
+  expire_at      DateTime? @db.Timestamp(6)  // 积分过期时间
+  is_expired     Boolean   @default(false)   // 是否已过期
+  
+  users          users?    @relation(fields: [user_id], references: [user_id])
 
   @@index([change_type])
   @@index([created_at(sort: Desc)])
   @@index([user_id])
+  @@index([expire_at])
+  @@index([is_expired])
 }
 
 model points_rules {
@@ -270,6 +294,10 @@ model resources {
   extracted_files                   Json?
   reject_reason                     String?            @db.VarChar(500)
   reject_reason_code                String?            @db.VarChar(50)
+  // 积分定价功能扩展字段
+  pricing_type                      Int                @default(0)  // 0=免费, 1=付费积分, 2=VIP专属
+  points_cost                       Int                @default(0)  // 积分价格 (0-100)
+  is_deleted                        Boolean            @default(false)  // 软删除标记
   
   audit_logs                        audit_logs[]
   download_history                  download_history[]
@@ -278,6 +306,10 @@ model resources {
   users_resources_user_idTousers    users?             @relation("resources_user_idTousers", fields: [user_id], references: [user_id])
   user_favorites                    user_favorites[]
   resource_notifications            notifications[]    @relation("notifications_resource_idToresources")
+  // 积分定价功能关联
+  earnings_records                  earnings_records[]
+  pricing_change_logs               pricing_change_logs[]
+  risk_control_logs                 risk_control_logs[]
 
   @@index([audit_status])
   @@index([category_id])
@@ -290,6 +322,8 @@ model resources {
   @@index([vip_level])
   @@index([file_hash])
   @@index([audit_status, created_at(sort: Desc)])
+  @@index([pricing_type])
+  @@index([is_deleted])
 }
 
 model role_permissions {
@@ -407,6 +441,14 @@ model users {
   points_vip_exchanges                                            points_vip_exchanges[]
   // 分片上传关联
   chunk_uploads                                                   chunk_uploads[]
+  // 积分充值系统关联
+  recharge_orders                                                 recharge_orders[]
+  points_adjustment_logs_admin                                    points_adjustment_logs[] @relation("adjustment_admin")
+  points_adjustment_logs_target                                   points_adjustment_logs[] @relation("adjustment_target")
+  // 充值限制字段
+  daily_recharge_count                                            Int                       @default(0)
+  daily_recharge_amount                                           Decimal                   @default(0) @db.Decimal(10, 2)
+  last_recharge_date                                              DateTime?                 @db.Date
 
   @@index([phone])
   @@index([role_id])
@@ -658,4 +700,171 @@ model points_vip_exchanges {
   @@unique([user_id, exchange_month])
   @@index([user_id])
   @@index([exchange_month])
+}
+
+
+// ==================== 积分定价功能新增表 ====================
+
+// 收益记录表
+model earnings_records {
+  earning_id      String           @id @default(uuid()) @db.VarChar(36)
+  resource_id     String           @db.VarChar(36)
+  uploader_id     String           @db.VarChar(36)
+  downloader_id   String           @db.VarChar(36)
+  download_id     String           @db.VarChar(36)
+  pricing_type    Int              // 资源定价类型
+  points_cost     Int              // 资源积分价格
+  earnings_points Int              // 实际收益积分
+  earnings_source String           @db.VarChar(50)  // 'normal_download' | 'vip_download' | 'platform_subsidy'
+  status          String           @default("pending") @db.VarChar(20)  // 'pending' | 'awarded' | 'frozen' | 'cancelled'
+  created_at      DateTime         @default(now()) @db.Timestamp(6)
+
+  resources        resources        @relation(fields: [resource_id], references: [resource_id])
+  download_history download_history @relation(fields: [download_id], references: [download_id])
+
+  @@index([resource_id])
+  @@index([uploader_id])
+  @@index([downloader_id])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+// 定价变更日志表
+model pricing_change_logs {
+  log_id           String    @id @default(uuid()) @db.VarChar(36)
+  resource_id      String    @db.VarChar(36)
+  operator_id      String    @db.VarChar(36)
+  operator_type    String    @db.VarChar(20)  // 'uploader' | 'auditor'
+  old_pricing_type Int
+  new_pricing_type Int
+  old_points_cost  Int
+  new_points_cost  Int
+  reason           String?
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+
+  resources resources @relation(fields: [resource_id], references: [resource_id])
+
+  @@index([resource_id])
+  @@index([operator_id])
+  @@index([created_at(sort: Desc)])
+}
+
+// 风控日志表
+model risk_control_logs {
+  log_id       String    @id @default(uuid()) @db.VarChar(36)
+  resource_id  String    @db.VarChar(36)
+  trigger_type String    @db.VarChar(50)  // 'high_frequency' | 'account_cluster' | 'new_account_burst'
+  trigger_data Json?
+  status       String    @default("pending") @db.VarChar(20)  // 'pending' | 'approved' | 'rejected'
+  reviewer_id  String?   @db.VarChar(36)
+  review_note  String?
+  reviewed_at  DateTime? @db.Timestamp(6)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+
+  resources resources @relation(fields: [resource_id], references: [resource_id])
+
+  @@index([resource_id])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+// ==================== 积分充值系统新增表 ====================
+
+// 充值套餐表
+model recharge_packages {
+  package_id    String   @id @default(uuid()) @db.VarChar(36)
+  package_name  String   @db.VarChar(50)
+  package_code  String   @unique @db.VarChar(50)
+  price         Decimal  @db.Decimal(10, 2)
+  base_points   Int
+  bonus_points  Int
+  bonus_rate    Decimal  @db.Decimal(5, 2)
+  sort_order    Int      @default(0)
+  is_recommend  Boolean  @default(false)
+  status        Int      @default(1)  // 1=启用, 0=禁用
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  updated_at    DateTime @default(now()) @db.Timestamp(6)
+
+  recharge_orders recharge_orders[]
+
+  @@index([status])
+  @@index([sort_order])
+}
+
+// 充值订单表
+model recharge_orders {
+  order_id        String    @id @default(uuid()) @db.VarChar(36)
+  order_no        String    @unique @db.VarChar(50)
+  user_id         String    @db.VarChar(36)
+  package_id      String    @db.VarChar(36)
+  amount          Decimal   @db.Decimal(10, 2)
+  base_points     Int
+  bonus_points    Int
+  total_points    Int
+  payment_method  String    @db.VarChar(20)  // 'wechat' | 'alipay'
+  payment_status  Int       @default(0)  // 0=待支付, 1=已支付, 2=已取消, 3=已退款
+  transaction_id  String?   @db.VarChar(100)
+  expire_at       DateTime  @db.Timestamp(6)
+  paid_at         DateTime? @db.Timestamp(6)
+  cancelled_at    DateTime? @db.Timestamp(6)
+  cancel_reason   String?   @db.VarChar(200)
+  ip_address      String?   @db.VarChar(50)
+  device_info     String?
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @db.Timestamp(6)
+
+  users             users             @relation(fields: [user_id], references: [user_id])
+  recharge_packages recharge_packages @relation(fields: [package_id], references: [package_id])
+
+  @@index([user_id])
+  @@index([order_no])
+  @@index([payment_status])
+  @@index([expire_at])
+  @@index([created_at(sort: Desc)])
+}
+
+// 充值支付回调记录表
+model recharge_callbacks {
+  callback_id     String   @id @default(uuid()) @db.VarChar(36)
+  order_no        String   @db.VarChar(50)
+  channel         String   @db.VarChar(20)  // 'wechat' | 'alipay'
+  transaction_id  String?  @db.VarChar(100)
+  callback_data   Json
+  signature       String?  @db.VarChar(500)
+  signature_valid Boolean?
+  processed       Boolean  @default(false)
+  process_result  String?  @db.VarChar(50)  // 'success' | 'failed' | 'duplicate'
+  error_message   String?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([order_no])
+  @@index([transaction_id])
+  @@index([processed])
+  @@index([created_at(sort: Desc)])
+}
+
+// 积分调整日志表
+model points_adjustment_logs {
+  log_id          String    @id @default(uuid()) @db.VarChar(36)
+  admin_id        String    @db.VarChar(36)
+  target_user_id  String    @db.VarChar(36)
+  adjustment_type String    @db.VarChar(20)  // 'add' | 'deduct' | 'gift' | 'batch_gift'
+  points_change   Int
+  points_before   Int
+  points_after    Int
+  reason          String    @db.VarChar(500)
+  is_revoked      Boolean   @default(false)
+  revoked_at      DateTime? @db.Timestamp(6)
+  revoked_by      String?   @db.VarChar(36)
+  revoke_reason   String?   @db.VarChar(200)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+
+  admin_user  users @relation("adjustment_admin", fields: [admin_id], references: [user_id])
+  target_user users @relation("adjustment_target", fields: [target_user_id], references: [user_id])
+
+  @@index([admin_id])
+  @@index([target_user_id])
+  @@index([adjustment_type])
+  @@index([is_revoked])
+  @@index([created_at(sort: Desc)])
 }

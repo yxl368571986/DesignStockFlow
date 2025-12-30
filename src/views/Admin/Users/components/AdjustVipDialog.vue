@@ -98,6 +98,7 @@ import { ref, reactive, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Star } from '@element-plus/icons-vue';
 import { formatTime } from '@/utils/format';
+import { adjustUserVip } from '@/api/adminUser';
 import type { FormInstance, FormRules } from 'element-plus';
 
 // 格式化日期的辅助函数
@@ -185,20 +186,18 @@ const handleSubmit = async () => {
 
     loading.value = true;
     try {
-      // TODO: 调用后端API调整VIP
-      // await adjustUserVip({
-      //   userId: props.user.userId,
-      //   vipLevel: form.vipLevel,
-      //   vipExpireAt: form.vipExpireAt,
-      //   reason: form.reason
-      // });
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 调用后端API调整VIP
+      await adjustUserVip(props.user.userId, {
+        vipLevel: form.vipLevel,
+        expireAt: form.vipLevel > 0 ? form.vipExpireAt : null,
+        reason: form.reason
+      });
       
       ElMessage.success('VIP调整成功');
       emit('success');
-    } catch (error) {
-      ElMessage.error('VIP调整失败');
+      visible.value = false;
+    } catch (error: any) {
+      ElMessage.error(error.message || 'VIP调整失败');
     } finally {
       loading.value = false;
     }

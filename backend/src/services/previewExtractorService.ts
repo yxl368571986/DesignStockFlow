@@ -7,8 +7,12 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/utils/logger.js';
 
-// ag-psd 库用于解析 PSD 文件
+// ag-psd 库用于解析 PSD 文件（RGB 模式）
 import { readPsd, Psd, initializeCanvas } from 'ag-psd';
+
+// psd.js 库用于解析 CMYK 模式的 PSD 文件
+// @ts-expect-error - psd.js 没有类型定义
+import PSD from 'psd';
 
 // Canvas 类型声明（用于 Node.js 环境）
 type CanvasType = {
@@ -87,19 +91,17 @@ class PreviewExtractorService {
 
     try {
       // 尝试动态导入 canvas 库（可选依赖）
-      // @ts-expect-error - dynamic import for optional canvas module
       const canvasModule = await import('canvas');
       const { createCanvas, Image } = canvasModule;
       
       // 初始化 ag-psd 的 canvas
-      initializeCanvas(createCanvas, Image);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      initializeCanvas(createCanvas as any, Image as any);
       this.canvasInitialized = true;
       logger.info('Canvas 初始化成功，PSD 预览图提取功能可用');
       return true;
     } catch (error) {
-      logger.warn('Canvas 库未安装或初始化失败，PSD 预览图提取功能不可用');
-      logger.warn('如需 PSD 预览功能，请安装 canvas 库: npm install canvas');
-      logger.warn('Windows 用户可能需要先安装 GTK 依赖');
+      logger.warn('Canvas 库未安装或初始化失败，将使用 psd.js 作为备选');
       return false;
     }
   }
@@ -190,7 +192,35 @@ class PreviewExtractorService {
     try {
       logger.info(`开始解析 PSD 文件: ${originalName}`);
 
-      // 初始化 canvas
+      // 确保预览图目录存在
+      await fs.promises.mkdir(this.previewDir, { recursive: true });
+
+      // 生成预览图文件名
+      const previewId = uuidv4();
+      const previewFileName = `${previewId}.png`;
+      const previewPath = path.join(this.previewDir, previewFileName);
+
+      // 优先使用 psd.js 库（支持 CMYK 模式）
+      try {
+        logger.info(`尝试使用 psd.js 解析: ${originalName}`);
+        const psd = await PSD.open(filePath);
+        await psd.image.saveAsPng(previewPath);
+        
+        // 验证文件是否成功生成
+        if (fs.existsSync(previewPath)) {
+          const previewUrl = `/uploads/previews/${previewFileName}`;
+          logger.info(`PSD 预览图生成成功 (psd.js): ${previewUrl}`);
+          return {
+            cover: previewUrl,
+            previewImages: [previewUrl],
+            success: true,
+          };
+        }
+      } catch (psdJsError) {
+        logger.warn(`psd.js 解析失败，尝试使用 ag-psd: ${psdJsError instanceof Error ? psdJsError.message : 'Unknown error'}`);
+      }
+
+      // 备选方案：使用 ag-psd 库（需要 canvas，不支持 CMYK）
       const canvasReady = await this.initCanvas();
       if (!canvasReady) {
         return {
@@ -204,45 +234,73 @@ class PreviewExtractorService {
       // 读取 PSD 文件
       const buffer = await fs.promises.readFile(filePath);
       
-      // 解析 PSD
-      const psd: Psd = readPsd(buffer, {
-        skipLayerImageData: true, // 跳过图层数据以提高性能
-        skipThumbnail: false,     // 保留缩略图
-      });
+      // 解析 PSD - 使用 useImageData 选项支持更多颜色模式
+      let psd: Psd;
+      try {
+        psd = readPsd(buffer, {
+          skipLayerImageData: true,
+          skipThumbnail: false,
+        });
+      } catch (firstError) {
+        logger.warn(`ag-psd 标准解析失败，尝试 useImageData 模式: ${originalName}`);
+        try {
+          psd = readPsd(buffer, {
+            skipLayerImageData: true,
+            skipThumbnail: false,
+            useImageData: true,
+          });
+        } catch (secondError) {
+          logger.warn(`ag-psd useImageData 模式也失败，尝试只读取缩略图: ${originalName}`);
+          psd = readPsd(buffer, {
+            skipLayerImageData: true,
+            skipCompositeImageData: true,
+            skipThumbnail: false,
+          });
+        }
+      }
 
-      // 检查是否有合成图像
-      if (!psd.canvas) {
-        logger.warn(`PSD 文件没有合成图像: ${originalName}`);
+      // 优先使用缩略图
+      if (psd.imageResources?.thumbnail) {
+        logger.info(`使用 PSD 内嵌缩略图: ${originalName}`);
+        const thumbnail = psd.imageResources.thumbnail;
+        
+        if (thumbnail && typeof (thumbnail as CanvasType).toBuffer === 'function') {
+          const pngBuffer = (thumbnail as CanvasType).toBuffer('image/png');
+          await fs.promises.writeFile(previewPath, pngBuffer);
+          
+          const previewUrl = `/uploads/previews/${previewFileName}`;
+          logger.info(`PSD 缩略图提取成功: ${previewUrl}`);
+          
+          return {
+            cover: previewUrl,
+            previewImages: [previewUrl],
+            success: true,
+          };
+        }
+      }
+
+      // 使用合成图像
+      if (psd.canvas) {
+        const canvas = psd.canvas as CanvasType;
+        const pngBuffer = canvas.toBuffer('image/png');
+        await fs.promises.writeFile(previewPath, pngBuffer);
+
+        const previewUrl = `/uploads/previews/${previewFileName}`;
+        logger.info(`PSD 预览图生成成功 (ag-psd): ${previewUrl}`);
+
         return {
-          cover: null,
-          previewImages: [],
-          success: false,
-          error: 'PSD 文件没有合成图像，无法生成预览',
+          cover: previewUrl,
+          previewImages: [previewUrl],
+          success: true,
         };
       }
 
-      // 生成预览图文件名
-      const previewId = uuidv4();
-      const previewFileName = `${previewId}.png`;
-      const previewPath = path.join(this.previewDir, previewFileName);
-
-      // 确保目录存在
-      await fs.promises.mkdir(this.previewDir, { recursive: true });
-
-      // 将 canvas 转换为 PNG buffer 并保存
-      const canvas = psd.canvas as CanvasType;
-      const pngBuffer = canvas.toBuffer('image/png');
-      await fs.promises.writeFile(previewPath, pngBuffer);
-
-      // 构建预览图 URL
-      const previewUrl = `/uploads/previews/${previewFileName}`;
-
-      logger.info(`PSD 预览图生成成功: ${previewUrl}`);
-
+      logger.warn(`PSD 文件没有合成图像: ${originalName}`);
       return {
-        cover: previewUrl,
-        previewImages: [previewUrl],
-        success: true,
+        cover: null,
+        previewImages: [],
+        success: false,
+        error: 'PSD 文件没有合成图像，无法生成预览',
       };
     } catch (error) {
       logger.error(`解析 PSD 文件失败: ${originalName}`, error);

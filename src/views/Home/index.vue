@@ -127,6 +127,7 @@
             :key="resource.resourceId"
             :resource="resource"
             :show-actions="true"
+            :is-collected="favoriteStatusMap[resource.resourceId] || false"
             @click="handleResourceClick"
             @download="handleResourceDownload"
             @collect="handleResourceCollect"
@@ -179,6 +180,7 @@
             :key="resource.resourceId"
             :resource="resource"
             :show-actions="true"
+            :is-collected="favoriteStatusMap[resource.resourceId] || false"
             @click="handleResourceClick"
             @download="handleResourceDownload"
             @collect="handleResourceCollect"
@@ -197,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Bell, Close, TrendCharts, Star, ArrowRight, Connection } from '@element-plus/icons-vue';
@@ -205,7 +207,7 @@ import { useConfigStore } from '@/pinia/configStore';
 import { useUserStore } from '@/pinia/userStore';
 import { useDownload } from '@/composables/useDownload';
 import { useOffline } from '@/composables/useOffline';
-import { getHotResources, getRecommendedResources, collectResource } from '@/api/resource';
+import { getHotResources, getRecommendedResources, collectResource, uncollectResource, checkFavoritesBatch } from '@/api/resource';
 import type { ResourceInfo, AnnouncementInfo } from '@/types/models';
 import BannerCarousel from '@/components/business/BannerCarousel.vue';
 import CategoryNav from '@/components/business/CategoryNav.vue';
@@ -247,6 +249,11 @@ const loadingRecommended = ref(false);
  */
 const isAnnouncementClosed = ref(false);
 
+/**
+ * 收藏状态映射表
+ */
+const favoriteStatusMap = ref<Record<string, boolean>>({});
+
 // ========== 计算属性 ==========
 
 /**
@@ -262,7 +269,6 @@ const importantAnnouncements = computed(() => configStore.importantAnnouncements
 async function fetchHotResources(): Promise<void> {
   // 如果离线，使用缓存资源
   if (!isOnline.value && cachedResources.value.length > 0) {
-    console.log('离线模式：使用缓存的热门资源');
     hotResources.value = cachedResources.value.slice(0, 8);
     return;
   }
@@ -281,7 +287,6 @@ async function fetchHotResources(): Promise<void> {
     console.error('获取热门资源失败:', error);
     // 如果请求失败且有缓存，使用缓存
     if (cachedResources.value.length > 0) {
-      console.log('使用缓存的热门资源');
       hotResources.value = cachedResources.value.slice(0, 8);
     }
   } finally {
@@ -295,7 +300,6 @@ async function fetchHotResources(): Promise<void> {
 async function fetchRecommendedResources(): Promise<void> {
   // 如果离线，使用缓存资源
   if (!isOnline.value && cachedResources.value.length > 0) {
-    console.log('离线模式：使用缓存的推荐资源');
     recommendedResources.value = cachedResources.value.slice(8, 16);
     return;
   }
@@ -314,7 +318,6 @@ async function fetchRecommendedResources(): Promise<void> {
     console.error('获取推荐资源失败:', error);
     // 如果请求失败且有缓存，使用缓存
     if (cachedResources.value.length > 8) {
-      console.log('使用缓存的推荐资源');
       recommendedResources.value = cachedResources.value.slice(8, 16);
     }
   } finally {
@@ -323,17 +326,45 @@ async function fetchRecommendedResources(): Promise<void> {
 }
 
 /**
+ * 获取资源收藏状态
+ */
+async function fetchFavoriteStatus(): Promise<void> {
+  // 未登录用户不需要获取收藏状态
+  if (!userStore.isLoggedIn) {
+    return;
+  }
+
+  // 收集所有资源ID
+  const allResourceIds = [
+    ...hotResources.value.map(r => r.resourceId),
+    ...recommendedResources.value.map(r => r.resourceId)
+  ];
+
+  if (allResourceIds.length === 0) {
+    return;
+  }
+
+  try {
+    const res = await checkFavoritesBatch(allResourceIds);
+    if (res.code === 200 && res.data) {
+      favoriteStatusMap.value = res.data;
+    }
+  } catch (error) {
+    console.error('获取收藏状态失败:', error);
+  }
+}
+
+/**
  * 处理轮播图切换
  */
 function handleBannerChange(index: number): void {
-  console.log('轮播图切换到:', index);
+  // 轮播图切换事件
 }
 
 /**
  * 处理分类切换
  */
 function handleCategoryChange(categoryId: string | null): void {
-  console.log('切换分类:', categoryId);
   // 跳转到资源列表页
   router.push({
     path: '/resource',
@@ -345,7 +376,6 @@ function handleCategoryChange(categoryId: string | null): void {
  * 处理资源卡片点击
  */
 function handleResourceClick(resourceId: string): void {
-  console.log('点击资源:', resourceId);
   // 路由跳转由ResourceCard组件内部处理
 }
 
@@ -353,8 +383,6 @@ function handleResourceClick(resourceId: string): void {
  * 处理资源下载
  */
 async function handleResourceDownload(resourceId: string): Promise<void> {
-  console.log('下载资源:', resourceId);
-
   // 查找资源信息
   const resource = [...hotResources.value, ...recommendedResources.value].find(
     (r) => r.resourceId === resourceId
@@ -366,11 +394,9 @@ async function handleResourceDownload(resourceId: string): Promise<void> {
 }
 
 /**
- * 处理资源收藏
+ * 处理资源收藏/取消收藏
  */
 async function handleResourceCollect(resourceId: string): Promise<void> {
-  console.log('收藏资源:', resourceId);
-
   // 检查用户是否已登录
   if (!userStore.isLoggedIn) {
     ElMessage.warning('未登录，请先登录');
@@ -381,16 +407,54 @@ async function handleResourceCollect(resourceId: string): Promise<void> {
     return;
   }
 
+  // 检查当前收藏状态
+  const isCurrentlyFavorited = favoriteStatusMap.value[resourceId] || false;
+
   try {
-    const res = await collectResource(resourceId);
-    if (res.code === 200) {
-      ElMessage.success('收藏成功');
+    if (isCurrentlyFavorited) {
+      // 取消收藏
+      const res = await uncollectResource(resourceId);
+      if (res.code === 200) {
+        favoriteStatusMap.value[resourceId] = false;
+        ElMessage.success('已取消收藏');
+      } else {
+        ElMessage.error(res.msg || '取消收藏失败');
+      }
     } else {
-      ElMessage.error(res.msg || '收藏失败');
+      // 收藏
+      const res = await collectResource(resourceId);
+      if (res.code === 200) {
+        favoriteStatusMap.value[resourceId] = true;
+        ElMessage.success('收藏成功');
+      } else if (res.code === 400 && res.msg === '已收藏该资源') {
+        // 已经收藏过，更新本地状态
+        favoriteStatusMap.value[resourceId] = true;
+        ElMessage.info('该资源已在收藏列表中');
+      } else {
+        ElMessage.error(res.msg || '收藏失败');
+      }
     }
-  } catch (error) {
-    console.error('收藏失败:', error);
-    ElMessage.error('收藏失败，请稍后重试');
+  } catch (error: unknown) {
+    console.error('收藏操作失败:', error);
+    // 处理后端返回的400错误（已收藏）- axios错误对象结构
+    if (error && typeof error === 'object') {
+      const axiosError = error as { response?: { data?: { code?: number; msg?: string } } };
+      const responseData = axiosError.response?.data;
+      
+      // 检查是否是"已收藏该资源"的错误
+      if (responseData?.code === 400 && responseData?.msg === '已收藏该资源') {
+        favoriteStatusMap.value[resourceId] = true;
+        ElMessage.info('该资源已在收藏列表中');
+        return;
+      }
+      
+      // 显示后端返回的错误消息
+      if (responseData?.msg) {
+        ElMessage.error(responseData.msg);
+        return;
+      }
+    }
+    ElMessage.error('操作失败，请稍后重试');
   }
 }
 
@@ -400,7 +464,7 @@ async function handleResourceCollect(resourceId: string): Promise<void> {
 function viewMoreHotResources(): void {
   router.push({
     path: '/resource',
-    query: { sortType: 'hot' }
+    query: { sort: 'download' }
   });
 }
 
@@ -410,7 +474,7 @@ function viewMoreHotResources(): void {
 function viewMoreRecommendedResources(): void {
   router.push({
     path: '/resource',
-    query: { sortType: 'download' }
+    query: { sort: 'download' }
   });
 }
 
@@ -471,7 +535,23 @@ async function initPage(): Promise<void> {
 
   // 并行获取热门和推荐资源
   await Promise.all([fetchHotResources(), fetchRecommendedResources()]);
+  
+  // 获取收藏状态（需要在资源加载完成后）
+  await fetchFavoriteStatus();
 }
+
+// 监听用户登录状态变化，重新获取收藏状态
+watch(
+  () => userStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      fetchFavoriteStatus();
+    } else {
+      // 用户登出，清空收藏状态
+      favoriteStatusMap.value = {};
+    }
+  }
+);
 
 // ========== 生命周期 ==========
 

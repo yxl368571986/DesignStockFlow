@@ -14,7 +14,7 @@
 -->
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -23,14 +23,27 @@ import {
   Delete,
   Check,
   Close,
-  Warning
+  Warning,
+  RefreshRight
 } from '@element-plus/icons-vue';
 import UploadArea from '@/components/business/UploadArea.vue';
+import PricingTypeSelector from '@/components/business/PricingTypeSelector.vue';
 import { useUpload } from '@/composables/useUpload';
 import { useConfigStore } from '@/pinia/configStore';
 import { useUserStore } from '@/pinia/userStore';
 import { FileStatus } from '@/components/business/UploadArea.types';
 import type { UploadMetadata } from '@/types/models';
+import { formatFileSize } from '@/utils/format';
+
+/**
+ * 手动修改标记 - 追踪哪些字段被用户手动修改过
+ */
+interface ManualOverrides {
+  categoryId: boolean;
+  description: boolean;
+  pricingType: boolean;
+  pointsCost: boolean;
+}
 
 /**
  * 批量上传文件项
@@ -43,7 +56,12 @@ interface BatchUploadItem {
   status: 'pending' | 'uploading' | 'success' | 'error';
   progress: number;
   error?: string;
-  metadata: UploadMetadata;
+  metadata: UploadMetadata & {
+    pricingType: number;
+    pointsCost: number;
+  };
+  /** 手动修改标记 - 被标记的字段不会被通用设置覆盖 */
+  manualOverrides: ManualOverrides;
 }
 
 const router = useRouter();
@@ -70,7 +88,9 @@ const formData = ref<UploadMetadata>({
   categoryId: '',
   tags: [],
   description: '',
-  vipLevel: 0
+  vipLevel: 0,
+  pricingType: 0,
+  pointsCost: 0
 });
 
 const currentTag = ref('');
@@ -156,6 +176,103 @@ function handleCategoryChange(value: string | string[] | null) {
   }
 }
 
+// ========== 通用设置实时同步 ==========
+// 监听通用设置变化，自动同步到未手动修改的文件
+watch(() => formData.value.categoryId, (newVal) => {
+  if (!isBatchMode.value) return;
+  for (const file of batchFiles.value) {
+    if (file.status === 'pending' && !file.manualOverrides.categoryId) {
+      file.metadata.categoryId = newVal;
+    }
+  }
+});
+
+watch(() => formData.value.pricingType, (newVal) => {
+  if (!isBatchMode.value) return;
+  for (const file of batchFiles.value) {
+    if (file.status === 'pending' && !file.manualOverrides.pricingType) {
+      file.metadata.pricingType = newVal ?? 0;
+      // 如果选择VIP专属，同步设置vipLevel
+      if (newVal === 2) {
+        file.metadata.vipLevel = 1;
+      }
+    }
+  }
+});
+
+watch(() => formData.value.pointsCost, (newVal) => {
+  if (!isBatchMode.value) return;
+  for (const file of batchFiles.value) {
+    if (file.status === 'pending' && !file.manualOverrides.pointsCost) {
+      file.metadata.pointsCost = newVal ?? 0;
+    }
+  }
+});
+
+watch(() => formData.value.description, (newVal) => {
+  if (!isBatchMode.value) return;
+  for (const file of batchFiles.value) {
+    if (file.status === 'pending' && !file.manualOverrides.description && newVal) {
+      file.metadata.description = newVal;
+    }
+  }
+});
+
+/**
+ * 标记文件的某个字段为手动修改
+ */
+function markAsManualOverride(fileId: string, field: keyof ManualOverrides) {
+  const file = batchFiles.value.find(f => f.id === fileId);
+  if (file) {
+    file.manualOverrides[field] = true;
+  }
+}
+
+/**
+ * 检查文件是否有任何手动修改
+ */
+function hasAnyManualOverride(file: BatchUploadItem): boolean {
+  return file.manualOverrides.categoryId || 
+         file.manualOverrides.description || 
+         file.manualOverrides.pricingType || 
+         file.manualOverrides.pointsCost;
+}
+
+/**
+ * 获取手动修改的字段列表（用于tooltip显示）
+ */
+function getManualOverrideFields(file: BatchUploadItem): string[] {
+  const fields: string[] = [];
+  if (file.manualOverrides.categoryId) fields.push('分类');
+  if (file.manualOverrides.description) fields.push('描述');
+  if (file.manualOverrides.pricingType) fields.push('定价类型');
+  if (file.manualOverrides.pointsCost) fields.push('积分价格');
+  return fields;
+}
+
+/**
+ * 重置文件设置为通用设置
+ */
+function resetToCommonSettings(fileId: string) {
+  const file = batchFiles.value.find(f => f.id === fileId);
+  if (file && file.status === 'pending') {
+    file.metadata.categoryId = formData.value.categoryId;
+    file.metadata.description = formData.value.description || file.metadata.description;
+    file.metadata.pricingType = formData.value.pricingType || 0;
+    file.metadata.pointsCost = formData.value.pointsCost || 0;
+    file.metadata.vipLevel = formData.value.vipLevel;
+    file.metadata.tags = [...formData.value.tags];
+    // 清除所有手动修改标记
+    file.manualOverrides = {
+      categoryId: false,
+      description: false,
+      pricingType: false,
+      pointsCost: false
+    };
+    ElMessage.success('已重置为通用设置');
+  }
+}
+
 function showTagInputBox() {
   showTagInput.value = true;
   setTimeout(() => tagInputRef.value?.focus(), 0);
@@ -205,13 +322,19 @@ function handleTagInputBlur() {
   hideTagInputBox();
 }
 
-function toggleBatchMode() {
-  isBatchMode.value = !isBatchMode.value;
-  if (!isBatchMode.value) {
+function toggleBatchMode(newValue: boolean) {
+  // el-switch 已经自动更新了 isBatchMode 的值，这里只需要处理清理逻辑
+  if (!newValue) {
     batchFiles.value = [];
     batchResult.total = 0;
     batchResult.success = 0;
     batchResult.failed = 0;
+  }
+}
+
+function triggerBatchFileSelect() {
+  if (batchFileInput.value) {
+    batchFileInput.value.click();
   }
 }
 
@@ -234,7 +357,16 @@ function handleBatchFilesSelect(event: Event) {
         categoryId: formData.value.categoryId || '',
         tags: [...formData.value.tags],
         description: formData.value.description || `${nameWithoutExt} 设计资源`,
-        vipLevel: formData.value.vipLevel
+        vipLevel: formData.value.vipLevel,
+        pricingType: formData.value.pricingType || 0,
+        pointsCost: formData.value.pointsCost || 0
+      },
+      // 新文件默认不标记为手动修改，这样通用设置变化会自动同步
+      manualOverrides: {
+        categoryId: false,
+        description: false,
+        pricingType: false,
+        pointsCost: false
       }
     });
   }
@@ -252,7 +384,16 @@ function applyCommonSettings() {
       file.metadata.categoryId = formData.value.categoryId;
       file.metadata.tags = [...formData.value.tags];
       file.metadata.vipLevel = formData.value.vipLevel;
+      file.metadata.pricingType = formData.value.pricingType || 0;
+      file.metadata.pointsCost = formData.value.pointsCost || 0;
       if (formData.value.description) file.metadata.description = formData.value.description;
+      // 清除所有手动修改标记
+      file.manualOverrides = {
+        categoryId: false,
+        description: false,
+        pricingType: false,
+        pointsCost: false
+      };
     }
   }
   ElMessage.success('已应用通用设置到所有待上传文件');
@@ -322,13 +463,6 @@ async function handleBatchUpload() {
   }
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
-
 async function handleSubmit() {
   if (!formRef.value) return;
   try {
@@ -357,7 +491,7 @@ async function handleSubmit() {
   if (result.success && result.data) {
     uploadAreaRef.value?.updateFileStatus(fileItem.id, FileStatus.SUCCESS, 100);
     // 根据审核状态显示不同提示
-    if (result.data.auditStatus === 1) {
+    if (result.data.isAudit === 1) {
       ElMessage.success('上传成功！资源已通过审核');
     } else {
       ElMessage.success('上传成功！资源正在审核中，审核通过后将展示在首页');
@@ -371,13 +505,25 @@ async function handleSubmit() {
 }
 
 function resetForm() {
-  formData.value = { title: '', categoryId: '', tags: [], description: '', vipLevel: 0 };
+  formData.value = { title: '', categoryId: '', tags: [], description: '', vipLevel: 0, pricingType: 0, pointsCost: 0 };
   uploadAreaRef.value?.clearFiles();
   formRef.value?.clearValidate();
 }
 
 function handleCancel() {
   router.back();
+}
+
+/**
+ * 处理定价类型变化
+ */
+function handlePricingChange(pricingType: number, pointsCost: number) {
+  formData.value.pricingType = pricingType;
+  formData.value.pointsCost = pointsCost;
+  // 如果选择VIP专属，同步设置vipLevel
+  if (pricingType === 2) {
+    formData.value.vipLevel = 1;
+  }
 }
 
 onMounted(async () => {
@@ -425,6 +571,26 @@ onMounted(async () => {
         v-if="isBatchMode"
         class="batch-upload-section"
       >
+        <!-- 操作提示 -->
+        <div class="batch-tips">
+          <el-alert
+            title="批量上传说明"
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              <div class="tips-content">
+                <p>1. 点击"选择多个文件"按钮添加要上传的文件</p>
+                <p>2. 在"通用设置"中设置分类、定价等信息，<strong>会自动同步到所有文件</strong></p>
+                <p>3. 如需单独设置某个文件，直接修改即可（修改后不再自动同步该字段）</p>
+                <p>4. 点击"应用到所有文件"可强制覆盖所有文件的设置</p>
+              </div>
+            </template>
+          </el-alert>
+        </div>
+
+        <!-- 文件选择区域 -->
         <div class="batch-file-selector">
           <input
             ref="batchFileInput"
@@ -439,84 +605,126 @@ onMounted(async () => {
             size="large"
             :icon="Plus"
             :disabled="isUploading"
-            @click="batchFileInput?.click()"
+            @click="triggerBatchFileSelect"
           >
             选择多个文件
           </el-button>
-          <span class="batch-hint">支持 PSD、AI、CDR、JPG、PNG、ZIP、RAR、7Z 格式</span>
+          <span class="batch-hint">支持 PSD、AI、CDR、JPG、PNG、ZIP、RAR、7Z 格式，单个文件最大 1000MB</span>
         </div>
 
+        <!-- 通用设置区域 -->
         <div
           v-if="batchFiles.length > 0"
           class="common-settings"
         >
           <div class="settings-header">
-            <span class="settings-title">通用设置</span>
+            <span class="settings-title">📋 通用设置（自动同步到所有文件）</span>
             <el-button
               size="small"
               type="primary"
               :disabled="isUploading"
               @click="applyCommonSettings"
             >
-              应用到所有文件
+              强制应用到所有文件
             </el-button>
           </div>
           <div class="settings-form">
-            <el-form-item label="分类">
-              <el-cascader
-                v-model="formData.categoryId"
-                :options="cascaderCategories"
-                :props="{ value: 'value', label: 'label', children: 'children', emitPath: false }"
-                placeholder="选择通用分类"
-                :disabled="isUploading"
-                clearable
-                filterable
-                size="small"
-                @change="handleCategoryChange"
-              />
-            </el-form-item>
-            <el-form-item label="VIP等级">
-              <el-radio-group
-                v-model="formData.vipLevel"
-                :disabled="isUploading"
-                size="small"
+            <div class="settings-row">
+              <el-form-item label="资源分类">
+                <el-cascader
+                  v-model="formData.categoryId"
+                  :options="cascaderCategories"
+                  :props="{ value: 'value', label: 'label', children: 'children', emitPath: false }"
+                  placeholder="选择通用分类"
+                  :disabled="isUploading"
+                  clearable
+                  filterable
+                  style="width: 200px"
+                  @change="handleCategoryChange"
+                />
+              </el-form-item>
+              <el-form-item label="资源定价">
+                <el-radio-group
+                  v-model="formData.pricingType"
+                  :disabled="isUploading"
+                >
+                  <el-radio :value="0">
+                    🆓 免费
+                  </el-radio>
+                  <el-radio :value="1">
+                    💰 付费积分
+                  </el-radio>
+                  <el-radio :value="2">
+                    👑 VIP专属
+                  </el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item
+                v-if="formData.pricingType === 1"
+                label="积分价格"
               >
-                <el-radio :value="0">
-                  免费
-                </el-radio>
-                <el-radio :value="1">
-                  VIP
-                </el-radio>
-              </el-radio-group>
-            </el-form-item>
+                <el-input-number
+                  v-model="formData.pointsCost"
+                  :min="1"
+                  :max="9999"
+                  :disabled="isUploading"
+                  style="width: 120px"
+                />
+              </el-form-item>
+            </div>
+            <div class="settings-row">
+              <el-form-item label="通用描述">
+                <el-input
+                  v-model="formData.description"
+                  placeholder="输入通用描述（可选，至少10字）"
+                  :disabled="isUploading"
+                  style="width: 400px"
+                />
+              </el-form-item>
+            </div>
           </div>
         </div>
 
+        <!-- 文件列表 -->
         <div
           v-if="batchFiles.length > 0"
           class="batch-file-list"
         >
           <div class="list-header">
-            <span>待上传文件 ({{ batchFiles.length }})</span>
+            <span class="list-title">📁 待上传文件 ({{ batchFiles.length }})</span>
             <span
               v-if="batchResult.total > 0"
               class="batch-stats"
             >
-              成功: {{ batchResult.success }} / 失败: {{ batchResult.failed }}
+              <el-tag
+                type="success"
+                size="small"
+              >
+                成功: {{ batchResult.success }}
+              </el-tag>
+              <el-tag
+                type="danger"
+                size="small"
+              >
+                失败: {{ batchResult.failed }}
+              </el-tag>
             </span>
           </div>
+          
+          <!-- 文件卡片列表 -->
           <div
             v-for="item in batchFiles"
             :key="item.id"
-            class="batch-file-item"
+            class="batch-file-card"
             :class="{
               'is-uploading': item.status === 'uploading',
               'is-success': item.status === 'success',
               'is-error': item.status === 'error'
             }"
           >
-            <div class="file-info">
-              <div class="file-name">
+            <!-- 文件头部信息 -->
+            <div class="file-header">
+              <div class="file-name-row">
                 <el-icon
                   v-if="item.status === 'success'"
                   class="status-icon success"
@@ -535,8 +743,52 @@ onMounted(async () => {
                 >
                   <UploadIcon />
                 </el-icon>
-                <span>{{ item.name }}</span>
-                <span class="file-size">({{ formatFileSize(item.size) }})</span>
+                <el-icon
+                  v-else
+                  class="status-icon pending"
+                >
+                  <UploadIcon />
+                </el-icon>
+                <span class="file-name-text">{{ item.name }}</span>
+                <el-tag
+                  size="small"
+                  type="info"
+                >
+                  {{ formatFileSize(item.size) }}
+                </el-tag>
+                <!-- 手动修改标记 -->
+                <el-tooltip
+                  v-if="hasAnyManualOverride(item)"
+                  :content="`已自定义: ${getManualOverrideFields(item).join('、')}`"
+                  placement="top"
+                >
+                  <el-tag
+                    size="small"
+                    type="warning"
+                    class="custom-tag"
+                  >
+                    已自定义
+                  </el-tag>
+                </el-tooltip>
+                <!-- 重置按钮 -->
+                <el-button
+                  v-if="item.status === 'pending' && hasAnyManualOverride(item)"
+                  type="info"
+                  :icon="RefreshRight"
+                  size="small"
+                  circle
+                  title="重置为通用设置"
+                  @click="resetToCommonSettings(item.id)"
+                />
+                <el-button
+                  v-if="item.status === 'pending'"
+                  type="danger"
+                  :icon="Delete"
+                  size="small"
+                  circle
+                  class="delete-btn"
+                  @click="removeBatchFile(item.id)"
+                />
               </div>
               <div
                 v-if="item.error"
@@ -548,56 +800,167 @@ onMounted(async () => {
                 {{ item.error }}
               </div>
             </div>
+
+            <!-- 文件元数据编辑区域 -->
             <div
               v-if="item.status === 'pending'"
-              class="file-metadata"
+              class="file-metadata-form"
             >
-              <el-input
-                v-model="item.metadata.title"
-                placeholder="标题"
-                size="small"
-                class="metadata-input"
-              />
-              <el-cascader
-                v-model="item.metadata.categoryId"
-                :options="cascaderCategories"
-                :props="{ value: 'value', label: 'label', children: 'children', emitPath: false }"
-                placeholder="分类"
-                size="small"
-                class="metadata-cascader"
-              />
-              <el-input
-                v-model="item.metadata.description"
-                placeholder="描述（至少10字）"
-                size="small"
-                class="metadata-input description"
-              />
+              <div class="metadata-row">
+                <div class="metadata-field">
+                  <label class="field-label">
+                    <span class="required">*</span> 资源标题
+                  </label>
+                  <el-input
+                    v-model="item.metadata.title"
+                    placeholder="请输入资源标题（2-100字符）"
+                    maxlength="100"
+                    show-word-limit
+                  />
+                </div>
+                <div class="metadata-field">
+                  <label class="field-label">
+                    <span class="required">*</span> 资源分类
+                    <el-tag
+                      v-if="item.manualOverrides.categoryId"
+                      size="small"
+                      type="warning"
+                      class="override-indicator"
+                    >
+                      已自定义
+                    </el-tag>
+                  </label>
+                  <el-cascader
+                    v-model="item.metadata.categoryId"
+                    :options="cascaderCategories"
+                    :props="{ value: 'value', label: 'label', children: 'children', emitPath: false }"
+                    placeholder="请选择分类"
+                    clearable
+                    filterable
+                    style="width: 100%"
+                    @change="markAsManualOverride(item.id, 'categoryId')"
+                  />
+                </div>
+              </div>
+              <div class="metadata-row">
+                <div class="metadata-field full-width">
+                  <label class="field-label">
+                    <span class="required">*</span> 资源描述
+                    <el-tag
+                      v-if="item.manualOverrides.description"
+                      size="small"
+                      type="warning"
+                      class="override-indicator"
+                    >
+                      已自定义
+                    </el-tag>
+                  </label>
+                  <el-input
+                    v-model="item.metadata.description"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="请输入资源描述（10-500字符）"
+                    maxlength="500"
+                    show-word-limit
+                    @input="markAsManualOverride(item.id, 'description')"
+                  />
+                </div>
+              </div>
+              <div class="metadata-row">
+                <div class="metadata-field">
+                  <label class="field-label">
+                    资源定价
+                    <el-tag
+                      v-if="item.manualOverrides.pricingType"
+                      size="small"
+                      type="warning"
+                      class="override-indicator"
+                    >
+                      已自定义
+                    </el-tag>
+                  </label>
+                  <el-radio-group
+                    v-model="item.metadata.pricingType"
+                    @change="markAsManualOverride(item.id, 'pricingType')"
+                  >
+                    <el-radio :value="0">
+                      🆓 免费
+                    </el-radio>
+                    <el-radio :value="1">
+                      💰 付费积分
+                    </el-radio>
+                    <el-radio :value="2">
+                      👑 VIP专属
+                    </el-radio>
+                  </el-radio-group>
+                </div>
+                <div
+                  v-if="item.metadata.pricingType === 1"
+                  class="metadata-field"
+                >
+                  <label class="field-label">
+                    积分价格
+                    <el-tag
+                      v-if="item.manualOverrides.pointsCost"
+                      size="small"
+                      type="warning"
+                      class="override-indicator"
+                    >
+                      已自定义
+                    </el-tag>
+                  </label>
+                  <el-input-number
+                    v-model="item.metadata.pointsCost"
+                    :min="1"
+                    :max="9999"
+                    style="width: 150px"
+                    @change="markAsManualOverride(item.id, 'pointsCost')"
+                  />
+                </div>
+              </div>
             </div>
+
+            <!-- 上传进度 -->
             <div
               v-if="item.status === 'uploading'"
               class="file-progress"
             >
               <el-progress
                 :percentage="uploadProgress"
-                :stroke-width="6"
-                :show-text="false"
+                :stroke-width="8"
+                status="success"
               />
+              <div class="progress-info">
+                <span>上传中...</span>
+                <span>{{ formattedSpeed }}</span>
+              </div>
             </div>
-            <el-button
-              v-if="item.status === 'pending'"
-              type="danger"
-              :icon="Delete"
-              size="small"
-              circle
-              @click="removeBatchFile(item.id)"
-            />
+
+            <!-- 上传成功状态 -->
+            <div
+              v-if="item.status === 'success'"
+              class="file-success-info"
+            >
+              <el-icon class="success-icon">
+                <Check />
+              </el-icon>
+              <span>上传成功，等待审核</span>
+            </div>
           </div>
         </div>
 
+        <!-- 底部操作按钮 -->
         <div
           v-if="batchFiles.length > 0"
           class="batch-actions"
         >
+          <el-button
+            size="large"
+            :disabled="isUploading"
+            @click="batchFiles = []; batchResult.total = 0; batchResult.success = 0; batchResult.failed = 0;"
+          >
+            清空列表
+          </el-button>
           <el-button
             type="primary"
             size="large"
@@ -607,6 +970,14 @@ onMounted(async () => {
           >
             {{ isUploading ? '上传中...' : `开始上传 (${batchFiles.filter((f: BatchUploadItem) => f.status === 'pending').length} 个文件)` }}
           </el-button>
+        </div>
+
+        <!-- 空状态提示 -->
+        <div
+          v-if="batchFiles.length === 0"
+          class="empty-state"
+        >
+          <el-empty description="请点击上方按钮选择要上传的文件" />
         </div>
       </div>
 
@@ -739,20 +1110,15 @@ onMounted(async () => {
                 show-word-limit
               />
             </el-form-item>
-            <el-form-item label="VIP等级">
-              <el-radio-group
-                v-model="formData.vipLevel"
+            <el-form-item label="资源定价">
+              <PricingTypeSelector
+                v-model:pricing-type="formData.pricingType"
+                v-model:points-cost="formData.pointsCost"
                 :disabled="isUploading"
-              >
-                <el-radio :value="0">
-                  免费资源
-                </el-radio>
-                <el-radio :value="1">
-                  VIP专属
-                </el-radio>
-              </el-radio-group>
+                @change="handlePricingChange"
+              />
               <div class="form-hint">
-                VIP专属资源只有VIP用户才能下载
+                免费资源所有用户可下载；付费积分资源需消耗积分；VIP专属仅VIP用户可下载
               </div>
             </el-form-item>
             <el-form-item class="form-actions">
@@ -955,11 +1321,28 @@ onMounted(async () => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
+.batch-tips {
+  margin-bottom: 20px;
+}
+
+.tips-content {
+  line-height: 1.8;
+}
+
+.tips-content p {
+  margin: 0;
+  font-size: 13px;
+}
+
 .batch-file-selector {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-bottom: 24px;
+  padding: 20px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  background: #fafafa;
 }
 
 .batch-hint {
@@ -969,9 +1352,10 @@ onMounted(async () => {
 
 .common-settings {
   margin-bottom: 24px;
-  padding: 16px;
+  padding: 20px;
   border-radius: 8px;
-  background: #f5f7fa;
+  background: #f0f9ff;
+  border: 1px solid #b3d8ff;
 }
 
 .settings-header {
@@ -982,15 +1366,22 @@ onMounted(async () => {
 }
 
 .settings-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: #303133;
 }
 
 .settings-form {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-row {
+  display: flex;
   gap: 24px;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .settings-form .el-form-item {
@@ -1005,71 +1396,85 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 14px;
-  font-weight: 500;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.list-title {
+  font-size: 16px;
+  font-weight: 600;
   color: #303133;
 }
 
 .batch-stats {
-  font-size: 12px;
-  color: #909399;
+  display: flex;
+  gap: 8px;
 }
 
-.batch-file-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
+.batch-file-card {
+  padding: 16px;
+  margin-bottom: 16px;
   border-radius: 8px;
-  background: #f5f7fa;
+  background: #fafafa;
+  border: 1px solid #ebeef5;
   transition: all 0.3s;
 }
 
-.batch-file-item.is-uploading {
+.batch-file-card:hover {
+  border-color: #c0c4cc;
+}
+
+.batch-file-card.is-uploading {
   background: #e6f7ff;
-  border: 1px solid #91d5ff;
+  border-color: #91d5ff;
 }
 
-.batch-file-item.is-success {
+.batch-file-card.is-success {
   background: #f6ffed;
-  border: 1px solid #b7eb8f;
+  border-color: #b7eb8f;
 }
 
-.batch-file-item.is-error {
+.batch-file-card.is-error {
   background: #fff2f0;
-  border: 1px solid #ffccc7;
+  border-color: #ffccc7;
 }
 
-.file-info {
-  flex: 0 0 200px;
+.file-header {
+  margin-bottom: 12px;
 }
 
-.file-name {
+.file-name-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #303133;
+  gap: 10px;
 }
 
-.file-size {
-  font-size: 12px;
-  color: #909399;
+.file-name-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-btn {
+  margin-left: auto;
 }
 
 .file-error {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 12px;
   color: #f56c6c;
 }
 
 .status-icon {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .status-icon.success {
@@ -1080,9 +1485,22 @@ onMounted(async () => {
   color: #f56c6c;
 }
 
+.status-icon.pending {
+  color: #909399;
+}
+
 .status-icon.uploading {
   color: #409eff;
   animation: spin 1s linear infinite;
+}
+
+.custom-tag {
+  margin-left: 8px;
+}
+
+.override-indicator {
+  margin-left: 8px;
+  font-weight: normal;
 }
 
 @keyframes spin {
@@ -1094,34 +1512,84 @@ onMounted(async () => {
   }
 }
 
-.file-metadata {
+.file-metadata-form {
+  padding: 16px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #ebeef5;
+}
+
+.metadata-row {
   display: flex;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.metadata-row:last-child {
+  margin-bottom: 0;
+}
+
+.metadata-field {
   flex: 1;
-  gap: 8px;
-  align-items: center;
+  min-width: 200px;
 }
 
-.metadata-input {
-  width: 150px;
+.metadata-field.full-width {
+  flex: 1 1 100%;
 }
 
-.metadata-input.description {
-  width: 200px;
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
 }
 
-.metadata-cascader {
-  width: 150px;
+.field-label .required {
+  color: #f56c6c;
+  margin-right: 4px;
 }
 
 .file-progress {
-  flex: 1;
-  max-width: 200px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.file-progress .progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.file-success-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0f9eb;
+  border-radius: 6px;
+  color: #67c23a;
+  font-size: 14px;
+}
+
+.file-success-info .success-icon {
+  font-size: 20px;
 }
 
 .batch-actions {
   display: flex;
   justify-content: center;
-  padding-top: 16px;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
+}
+
+.empty-state {
+  padding: 40px 0;
 }
 
 @media (max-width: 1200px) {

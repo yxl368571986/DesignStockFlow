@@ -8,6 +8,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { getOrderDetail, requestRefund } from '@/api/vip';
 import type { VipOrder } from '@/api/vip';
+import { getVipOrderStatusText, getVipOrderStatusType, getPaymentMethodText as getPaymentText } from '@/utils/status';
+import { formatTime as formatDateTime } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
@@ -43,50 +45,23 @@ const refundReasonTypes = [
 
 /** 获取状态文本 */
 function getStatusText(status: number): string {
-  const map: Record<number, string> = {
-    0: '待支付',
-    1: '已支付',
-    2: '已取消',
-    3: '已退款',
-    4: '支付失败'
-  };
-  return map[status] || '未知';
+  return getVipOrderStatusText(status);
 }
 
 /** 获取状态类型 */
 function getStatusType(status: number): string {
-  const map: Record<number, string> = {
-    0: 'warning',
-    1: 'success',
-    2: 'info',
-    3: 'danger',
-    4: 'danger'
-  };
-  return map[status] || 'info';
+  return getVipOrderStatusType(status);
 }
 
 /** 获取支付方式文本 */
 function getPaymentMethodText(method: string): string {
-  const map: Record<string, string> = {
-    wechat: '微信支付',
-    alipay: '支付宝',
-    points: '积分兑换'
-  };
-  return map[method] || method;
+  return getPaymentText(method);
 }
 
 /** 格式化时间 */
 function formatTime(time: string): string {
   if (!time) return '-';
-  const date = new Date(time);
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  return formatDateTime(time, 'YYYY-MM-DD HH:mm:ss');
 }
 
 /** 是否可以退款 */

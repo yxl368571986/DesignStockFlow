@@ -85,6 +85,31 @@ export async function getPointsProducts(req: Request, res: Response) {
 }
 
 /**
+ * 获取单个积分商品详情
+ * GET /api/v1/points/products/:productId
+ */
+export async function getPointsProductById(req: Request, res: Response) {
+  try {
+    const { productId } = req.params;
+
+    if (!productId) {
+      return errorResponse(res, '商品ID不能为空', 400);
+    }
+
+    const product = await pointsService.getPointsProductById(productId);
+    
+    if (!product) {
+      return errorResponse(res, '商品不存在', 404);
+    }
+
+    return successResponse(res, product, '获取商品详情成功');
+  } catch (error: any) {
+    console.error('获取商品详情失败:', error);
+    return errorResponse(res, error.message || '获取商品详情失败', 500);
+  }
+}
+
+/**
  * 兑换积分商品
  * POST /api/v1/points/exchange
  */
@@ -96,13 +121,13 @@ export async function exchangeProduct(req: Request, res: Response) {
       return errorResponse(res, '未登录', 401);
     }
 
-    const { productId, deliveryAddress } = req.body;
+    const { product_id, delivery_address } = req.body;
 
-    if (!productId) {
+    if (!product_id) {
       return errorResponse(res, '商品ID不能为空', 400);
     }
 
-    const result = await pointsService.exchangeProduct(userId, productId, deliveryAddress);
+    const result = await pointsService.exchangeProduct(userId, product_id, delivery_address);
     
     return successResponse(res, result, '兑换成功');
   } catch (error: any) {

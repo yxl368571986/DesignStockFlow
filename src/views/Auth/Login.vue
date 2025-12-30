@@ -14,6 +14,19 @@
 <template>
   <div class="login-page">
     <div class="login-container">
+      <!-- 返回按钮 -->
+      <div class="back-button-wrapper">
+        <el-button
+          type="default"
+          text
+          class="back-button"
+          @click="handleGoBack"
+        >
+          <el-icon><ArrowLeft /></el-icon>
+          返回
+        </el-button>
+      </div>
+
       <!-- Logo和标题 -->
       <div class="login-header">
         <div class="logo">
@@ -151,7 +164,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
-import { Phone, Lock, View, Hide, ChatDotRound, User } from '@element-plus/icons-vue';
+import { Phone, Lock, View, Hide, ChatDotRound, User, ArrowLeft } from '@element-plus/icons-vue';
 import { useAuth } from '@/composables/useAuth';
 import { validatePhone } from '@/utils/validate';
 
@@ -206,6 +219,22 @@ const loginRules: FormRules = {
 };
 
 // ========== 登录处理 ==========
+/**
+ * 处理返回
+ */
+function handleGoBack() {
+  // 如果有重定向地址，返回到该地址
+  if (redirectUrl.value) {
+    router.push(redirectUrl.value);
+  } else if (window.history.length > 1) {
+    // 如果有浏览历史，返回上一页
+    router.back();
+  } else {
+    // 否则返回首页
+    router.push('/');
+  }
+}
+
 /**
  * 处理登录
  */
@@ -291,6 +320,31 @@ onMounted(() => {
   border-radius: 16px;
   padding: 40px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+/* 返回按钮 */
+.back-button-wrapper {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+}
+
+.back-button {
+  color: #86909c;
+  font-size: 14px;
+  padding: 8px 12px;
+  transition: all 0.3s;
+}
+
+.back-button:hover {
+  color: #165dff;
+  background: rgba(22, 93, 255, 0.1);
+  border-radius: 6px;
+}
+
+.back-button .el-icon {
+  margin-right: 4px;
 }
 
 /* Logo和标题 */

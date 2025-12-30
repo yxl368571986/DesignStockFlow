@@ -10,7 +10,15 @@ import {
   getDownloadStats,
   batchDownload,
   downloadResourceV2,
+  getDownloadConfirmation,
+  executeDownloadWithEarnings,
+  downloadFile,
 } from '@/controllers/downloadController.js';
+import {
+  setPricingHandler,
+  getPricingHandler,
+  setBatchPricingHandler,
+} from '@/controllers/pricingController.js';
 
 const router = Router();
 
@@ -54,6 +62,15 @@ router.post('/complete-upload', authenticate, resourceController.completeChunkUp
 router.post('/batch-download', authenticate, batchDownload);
 
 /**
+ * 批量设置资源定价
+ * POST /api/v1/resources/batch-pricing
+ * 需要认证
+ * 
+ * 需求: 1.6
+ */
+router.post('/batch-pricing', authenticate, setBatchPricingHandler);
+
+/**
  * 获取资源详情
  * GET /api/v1/resources/:resourceId
  * 可选认证（登录用户返回积分信息）
@@ -61,11 +78,54 @@ router.post('/batch-download', authenticate, batchDownload);
 router.get('/:resourceId', optionalAuthenticate, resourceController.getResourceDetail);
 
 /**
+ * 获取资源定价信息
+ * GET /api/v1/resources/:resourceId/pricing
+ * 
+ * 需求: 1.1
+ */
+router.get('/:resourceId/pricing', getPricingHandler);
+
+/**
+ * 设置资源定价
+ * POST /api/v1/resources/:resourceId/pricing
+ * 需要认证
+ * 
+ * 需求: 1.1
+ */
+router.post('/:resourceId/pricing', authenticate, setPricingHandler);
+
+/**
  * 检查下载权限 (Task 3.6)
  * GET /api/v1/resources/:resourceId/download-permission
  * 需要认证
  */
 router.get('/:resourceId/download-permission', authenticate, checkDownloadPermission);
+
+/**
+ * 获取下载确认信息
+ * GET /api/v1/resources/:resourceId/download/confirm
+ * 需要认证
+ * 
+ * 需求: 3.3, 3.4
+ */
+router.get('/:resourceId/download/confirm', authenticate, getDownloadConfirmation);
+
+/**
+ * 执行下载（带积分扣除和收益发放）
+ * POST /api/v1/resources/:resourceId/download/execute
+ * 需要认证
+ * 
+ * 需求: 3.1, 3.2, 3.4, 3.5, 3.6, 4.6, 4.7
+ */
+router.post('/:resourceId/download/execute', authenticate, executeDownloadWithEarnings);
+
+/**
+ * 文件流下载
+ * GET /api/v1/resources/:resourceId/download/file
+ * 需要认证
+ * 直接返回文件流，强制浏览器下载
+ */
+router.get('/:resourceId/download/file', authenticate, downloadFile);
 
 /**
  * 下载资源（原接口）

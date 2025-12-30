@@ -181,11 +181,11 @@ export const useConfigStore = defineStore('config', () => {
   });
 
   /**
-   * 重要公告列表（置顶或重要级别）
+   * 重要公告列表（所有启用状态的公告，按置顶和创建时间排序）
    */
   const importantAnnouncements = computed(() => {
     return announcements.value
-      .filter((ann) => ann.status === 1 && (ann.isTop || ann.level === 'important'))
+      .filter((ann) => ann.status === 1)  // 只筛选启用状态的公告
       .sort((a, b) => {
         // 置顶优先
         if (a.isTop && !b.isTop) return -1;

@@ -19,7 +19,7 @@ import { useUserStore } from '@/pinia/userStore';
 import { formatDownloadCount } from '@/utils/format';
 import { getFullImageUrl } from '@/utils/url';
 import type { ResourceInfo } from '@/types/models';
-import { Download, Star, Loading, Picture, Coin } from '@element-plus/icons-vue';
+import { Download, Star, StarFilled, Loading, Picture, Coin } from '@element-plus/icons-vue';
 
 /**
  * 资源卡片组件
@@ -33,11 +33,14 @@ interface ResourceCardProps {
   showActions?: boolean;
   /** 是否懒加载图片 */
   lazy?: boolean;
+  /** 是否已收藏 */
+  isCollected?: boolean;
 }
 
 const props = withDefaults(defineProps<ResourceCardProps>(), {
   showActions: true,
-  lazy: true
+  lazy: true,
+  isCollected: false
 });
 
 // Emits定义
@@ -66,6 +69,10 @@ const formattedDownloadCount = computed(() => {
 
 // 计算属性：是否为VIP资源
 const isVIP = computed(() => {
+  // 优先使用pricingType判断
+  if (props.resource.pricingType !== undefined) {
+    return props.resource.pricingType === 2;
+  }
   return props.resource.vipLevel > 0;
 });
 
@@ -81,8 +88,10 @@ const showPointsInfo = computed(() => {
 
 // 计算属性：积分消耗文本
 const pointsCostText = computed(() => {
-  // VIP资源显示"会员下载"
-  if (isVIP.value) {
+  const pricingType = props.resource.pricingType ?? 0;
+  
+  // VIP专属资源显示"会员下载"
+  if (pricingType === 2 || isVIP.value) {
     return '会员下载';
   }
 
@@ -91,19 +100,22 @@ const pointsCostText = computed(() => {
     return 'VIP免费';
   }
 
-  // 根据资源的pointsCost显示
-  const pointsCost = props.resource.pointsCost || 0;
-  if (pointsCost === 0) {
-    return '免费下载';
+  // 付费积分资源
+  if (pricingType === 1) {
+    const pointsCost = props.resource.pointsCost || 0;
+    return `${pointsCost}积分`;
   }
 
-  return `${pointsCost}积分`;
+  // 免费资源
+  return '免费下载';
 });
 
 // 计算属性：积分标签类型
 const pointsTagType = computed(() => {
-  // VIP资源使用黄色/橙色
-  if (isVIP.value) {
+  const pricingType = props.resource.pricingType ?? 0;
+  
+  // VIP专属资源使用黄色/橙色
+  if (pricingType === 2 || isVIP.value) {
     return 'warning';
   }
 
@@ -112,12 +124,13 @@ const pointsTagType = computed(() => {
     return 'warning';
   }
 
-  const pointsCost = props.resource.pointsCost || 0;
-  if (pointsCost === 0) {
-    return 'success'; // 免费用绿色
+  // 付费积分资源用蓝色
+  if (pricingType === 1) {
+    return 'primary';
   }
 
-  return 'primary'; // 需要积分用蓝色
+  // 免费用绿色
+  return 'success';
 });
 
 // 处理卡片点击
@@ -200,8 +213,9 @@ function handleCollect(event?: Event) {
           @click="handleDownload"
         />
         <el-button
-          type="info"
-          :icon="Star"
+          :type="props.isCollected ? 'warning' : 'info'"
+          :icon="props.isCollected ? StarFilled : Star"
+          :class="{ 'is-collected': props.isCollected }"
           circle
           @click="handleCollect"
         />
@@ -346,6 +360,13 @@ function handleCollect(event?: Event) {
 
 .card-actions .el-button {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 收藏按钮高亮状态 */
+.card-actions .el-button.is-collected {
+  background-color: #ff7d00 !important;
+  border-color: #ff7d00 !important;
+  color: #fff !important;
 }
 
 /* 遮罩层效果 */

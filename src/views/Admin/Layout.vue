@@ -96,6 +96,11 @@
           <el-menu-item index="/admin/points/products">商城商品</el-menu-item>
           <el-menu-item index="/admin/points/exchanges">兑换记录</el-menu-item>
           <el-menu-item index="/admin/points/statistics">积分统计</el-menu-item>
+          <el-menu-item index="/admin/points/packages">充值套餐</el-menu-item>
+          <el-menu-item index="/admin/points/adjust">积分调整</el-menu-item>
+          <el-menu-item index="/admin/points/batch-gift">批量赠送</el-menu-item>
+          <el-menu-item index="/admin/points/orders">充值订单</el-menu-item>
+          <el-menu-item index="/admin/points/logs">调整日志</el-menu-item>
         </el-sub-menu>
 
         <!-- 数据统计 -->

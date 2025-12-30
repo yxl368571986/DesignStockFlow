@@ -263,11 +263,14 @@ export class UserService {
 
     return {
       vipLevel: user.vip_level,
-      vipExpireAt: user.vip_expire_at,
+      vipExpireTime: user.vip_expire_at, // 前端使用vipExpireTime
       isVIP,
       daysRemaining: isVIP && user.vip_expire_at
         ? Math.ceil((user.vip_expire_at.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         : 0,
+      downloadLimit: isVIP ? 50 : 10, // VIP每日50次，普通用户10次
+      downloadUsed: 0, // TODO: 从下载记录中统计
+      privileges: isVIP ? ['无限下载', '专属标识', '优先客服', '积分兑换'] : [],
     };
   }
 

@@ -77,7 +77,8 @@ class FavoriteController {
   async checkFavorites(req: Request, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { resourceIds } = req.body;
+      // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
+      const resourceIds = req.body.resource_ids || req.body.resourceIds;
 
       if (!userId) {
         const result: Record<string, boolean> = {};

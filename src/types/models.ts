@@ -36,6 +36,7 @@ export interface ResourceInfo {
   likeCount?: number; // 点赞次数
   collectCount?: number; // 收藏次数
   vipLevel: number; // 0-免费, 1-VIP专属
+  pricingType?: number; // 定价类型: 0-免费, 1-付费积分, 2-VIP专属
   pointsCost?: number; // 下载所需积分（登录用户可见）
   categoryId: string;
   categoryName: string;
@@ -96,6 +97,10 @@ export interface UploadMetadata {
   tags: string[];
   description: string;
   vipLevel: number;
+  /** 定价类型: 0-免费, 1-付费积分, 2-VIP专属 */
+  pricingType?: number;
+  /** 积分价格 (仅当pricingType=1时有效) */
+  pointsCost?: number;
 }
 
 // 分片信息
@@ -112,6 +117,7 @@ export interface SearchParams {
   categoryId?: string;
   format?: string;
   vipLevel?: number;
+  pricingType?: number; // 定价类型筛选: 0-免费, 1-付费积分, 2-VIP专属
   sortType?: 'comprehensive' | 'download' | 'latest' | 'like' | 'collect'; // 排序方式
   pageNum: number;
   pageSize: number;
@@ -155,7 +161,7 @@ export interface AnnouncementInfo {
   title: string;
   content: string;
   type: 'normal' | 'warning' | 'important'; // 公告类型
-  level: 'normal' | 'important'; // 重要程度
+  level: 'normal' | 'warning' | 'important'; // 重要程度（与type保持一致）
   isTop: boolean; // 是否置顶
   linkUrl?: string;
   status: number; // 0-禁用, 1-启用

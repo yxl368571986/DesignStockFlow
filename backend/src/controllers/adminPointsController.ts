@@ -58,32 +58,33 @@ export async function getPointsProducts(req: Request, res: Response) {
  */
 export async function addPointsProduct(req: Request, res: Response) {
   try {
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
     const {
-      productName,
-      productType,
-      productCode,
-      pointsRequired,
-      productValue,
+      product_name,
+      product_type,
+      product_code,
+      points_required,
+      product_value,
       stock,
-      imageUrl,
+      image_url,
       description,
-      sortOrder
+      sort_order
     } = req.body;
 
-    if (!productName || !productType || !productCode || !pointsRequired) {
+    if (!product_name || !product_type || !product_code || !points_required) {
       return errorResponse(res, '商品名称、类型、代码和所需积分不能为空', 400);
     }
 
     const product = await pointsService.addPointsProduct({
-      productName,
-      productType,
-      productCode,
-      pointsRequired,
-      productValue,
+      productName: product_name,
+      productType: product_type,
+      productCode: product_code,
+      pointsRequired: points_required,
+      productValue: product_value,
       stock,
-      imageUrl,
+      imageUrl: image_url,
       description,
-      sortOrder
+      sortOrder: sort_order
     });
 
     return successResponse(res, product, '添加商品成功');
@@ -100,25 +101,26 @@ export async function addPointsProduct(req: Request, res: Response) {
 export async function updatePointsProduct(req: Request, res: Response) {
   try {
     const { productId } = req.params;
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
     const {
-      productName,
-      pointsRequired,
-      productValue,
+      product_name,
+      points_required,
+      product_value,
       stock,
-      imageUrl,
+      image_url,
       description,
-      sortOrder,
+      sort_order,
       status
     } = req.body;
 
     const product = await pointsService.updatePointsProduct(productId, {
-      productName,
-      pointsRequired,
-      productValue,
+      productName: product_name,
+      pointsRequired: points_required,
+      productValue: product_value,
       stock,
-      imageUrl,
+      imageUrl: image_url,
       description,
-      sortOrder,
+      sortOrder: sort_order,
       status
     });
 

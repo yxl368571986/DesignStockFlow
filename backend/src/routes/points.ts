@@ -16,6 +16,9 @@ router.get('/records', pointsController.getPointsRecords);
 // 获取积分商品列表
 router.get('/products', pointsController.getPointsProducts);
 
+// 获取单个积分商品详情
+router.get('/products/:productId', pointsController.getPointsProductById);
+
 // 兑换积分商品
 router.post('/exchange', pointsController.exchangeProduct);
 

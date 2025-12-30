@@ -274,6 +274,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Plus, Edit, Delete, Search, Refresh, Link, View, Top, Bottom } from '@element-plus/icons-vue';
+import { getAdminAnnouncementList, createAdminAnnouncement, updateAdminAnnouncement, deleteAdminAnnouncement } from '@/api/adminAnnouncement';
 
 // 类型定义
 interface AnnouncementItem {
@@ -355,56 +356,13 @@ const formRules: FormRules = {
 const fetchAnnouncementList = async () => {
   loading.value = true;
   try {
-    // TODO: 调用实际API
-    // const response = await getAnnouncements({
-    //   ...filterForm,
-    //   page: pagination.page,
-    //   pageSize: pagination.pageSize
-    // });
-    // announcementList.value = response.data.list;
-    // pagination.total = response.data.total;
-    
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 500));
-    announcementList.value = [
-      {
-        announcementId: '1',
-        title: '系统维护通知',
-        content: '系统将于<b>2024年1月15日 02:00-04:00</b>进行维护升级，期间可能无法访问，请提前做好准备。感谢您的理解与支持！',
-        type: 'important',
-        linkUrl: '',
-        isTop: true,
-        startTime: '2024-01-10 00:00:00',
-        endTime: '2024-01-20 23:59:59',
-        status: 1,
-        createdAt: '2024-01-10 10:00:00'
-      },
-      {
-        announcementId: '2',
-        title: '春节活动上线',
-        content: '春节特别活动已上线！上传作品即可获得<span style="color: #ff7d00;">双倍积分</span>，更有机会赢取VIP年卡！活动时间：1月20日-2月20日。',
-        type: 'normal',
-        linkUrl: '/activities/spring-festival',
-        isTop: false,
-        startTime: '2024-01-20 00:00:00',
-        endTime: '2024-02-20 23:59:59',
-        status: 1,
-        createdAt: '2024-01-15 10:00:00'
-      },
-      {
-        announcementId: '3',
-        title: '违规内容处理公告',
-        content: '近期发现部分用户上传违规内容，请各位用户遵守平台规则。违规内容将被删除，严重者将被封号处理。',
-        type: 'warning',
-        linkUrl: '/rules',
-        isTop: false,
-        startTime: '2024-01-01 00:00:00',
-        endTime: '2024-12-31 23:59:59',
-        status: 1,
-        createdAt: '2024-01-01 10:00:00'
-      }
-    ];
-    pagination.total = 3;
+    const response = await getAdminAnnouncementList({
+      ...filterForm,
+      page: pagination.page,
+      limit: pagination.pageSize
+    });
+    announcementList.value = response.list;
+    pagination.total = response.total;
   } catch (error) {
     ElMessage.error('获取公告列表失败');
     console.error(error);
@@ -464,11 +422,11 @@ const handleDelete = async (row: AnnouncementItem) => {
       }
     );
 
-    // TODO: 调用删除API
-    // await deleteAnnouncement(row.announcementId);
-    
-    ElMessage.success('删除成功');
-    await fetchAnnouncementList();
+    if (row.announcementId) {
+      await deleteAdminAnnouncement(row.announcementId);
+      ElMessage.success('删除成功');
+      await fetchAnnouncementList();
+    }
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败');
@@ -480,11 +438,12 @@ const handleDelete = async (row: AnnouncementItem) => {
 // 置顶
 const handleTop = async (row: AnnouncementItem) => {
   try {
-    // TODO: 调用置顶API
-    // await topAnnouncement(row.announcementId);
-    
-    row.isTop = true;
-    ElMessage.success('置顶成功');
+    if (row.announcementId) {
+      await updateAdminAnnouncement(row.announcementId, { isTop: true });
+      row.isTop = true;
+      ElMessage.success('置顶成功');
+      await fetchAnnouncementList();
+    }
   } catch (error) {
     ElMessage.error('置顶失败');
     console.error(error);
@@ -494,11 +453,12 @@ const handleTop = async (row: AnnouncementItem) => {
 // 取消置顶
 const handleCancelTop = async (row: AnnouncementItem) => {
   try {
-    // TODO: 调用取消置顶API
-    // await cancelTopAnnouncement(row.announcementId);
-    
-    row.isTop = false;
-    ElMessage.success('已取消置顶');
+    if (row.announcementId) {
+      await updateAdminAnnouncement(row.announcementId, { isTop: false });
+      row.isTop = false;
+      ElMessage.success('已取消置顶');
+      await fetchAnnouncementList();
+    }
   } catch (error) {
     ElMessage.error('操作失败');
     console.error(error);
@@ -508,10 +468,10 @@ const handleCancelTop = async (row: AnnouncementItem) => {
 // 状态切换
 const handleStatusChange = async (row: AnnouncementItem) => {
   try {
-    // TODO: 调用更新状态API
-    // await updateAnnouncementStatus(row.announcementId, row.status);
-    
-    ElMessage.success(row.status === 1 ? '已启用' : '已禁用');
+    if (row.announcementId) {
+      await updateAdminAnnouncement(row.announcementId, { status: row.status });
+      ElMessage.success(row.status === 1 ? '已启用' : '已禁用');
+    }
   } catch (error) {
     // 恢复原状态
     row.status = row.status === 1 ? 0 : 1;
@@ -537,18 +497,21 @@ const handleSubmit = async () => {
 
     // 构建提交数据
     const submitData = {
-      ...formData,
+      title: formData.title,
+      content: formData.content,
+      type: formData.type,
+      linkUrl: formData.linkUrl,
+      isTop: formData.isTop,
+      status: formData.status,
       startTime: formData.timeRange[0],
       endTime: formData.timeRange[1]
     };
-    delete (submitData as any).timeRange;
 
-    // TODO: 调用添加/编辑API
     if (formData.announcementId) {
-      // await updateAnnouncement(formData.announcementId, submitData);
+      await updateAdminAnnouncement(formData.announcementId, submitData);
       ElMessage.success('编辑成功');
     } else {
-      // await createAnnouncement(submitData);
+      await createAdminAnnouncement(submitData);
       ElMessage.success('添加成功');
     }
 

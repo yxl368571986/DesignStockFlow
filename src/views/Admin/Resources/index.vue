@@ -133,8 +133,8 @@
           <template #default="{ row }">
             <div class="resource-info-cell">
               <el-image
-                :src="row.cover"
-                :preview-src-list="[row.cover]"
+                :src="getFullImageUrl(row.cover, row.resourceId)"
+                :preview-src-list="[getFullImageUrl(row.cover, row.resourceId)]"
                 fit="cover"
                 class="resource-cover"
               >
@@ -331,7 +331,8 @@ import {
   Picture
 } from '@element-plus/icons-vue';
 import ResourceEditDialog from './components/ResourceEditDialog.vue';
-import { formatTime } from '@/utils/format';
+import { formatTime, formatFileSize } from '@/utils/format';
+import { getFullImageUrl } from '@/utils/url';
 import {
   getAdminResourceList,
   deleteAdminResource,
@@ -347,15 +348,6 @@ import {
 
 // 格式化日期
 const formatDate = (date: string) => formatTime(date, 'YYYY-MM-DD HH:mm:ss');
-
-// 格式化文件大小
-const formatFileSize = (bytes: number) => {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-};
 
 // 分类列表
 interface Category {

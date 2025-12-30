@@ -69,6 +69,7 @@ export const useResourceStore = defineStore('resource', () => {
     categoryId: undefined,
     format: undefined,
     vipLevel: undefined,
+    pricingType: undefined,
     sortType: 'comprehensive',
     pageNum: 1,
     pageSize: 21
@@ -117,7 +118,8 @@ export const useResourceStore = defineStore('resource', () => {
       searchParams.value.keyword ||
       searchParams.value.categoryId ||
       searchParams.value.format ||
-      searchParams.value.vipLevel !== undefined
+      searchParams.value.vipLevel !== undefined ||
+      searchParams.value.pricingType !== undefined
     );
   });
 
@@ -227,6 +229,7 @@ export const useResourceStore = defineStore('resource', () => {
       updates.categoryId === undefined &&
       updates.format === undefined &&
       updates.vipLevel === undefined &&
+      updates.pricingType === undefined &&
       updates.sortType === undefined;
 
     // 如果更新了筛选条件（非分页），且没有显式传入pageNum，则重置页码
@@ -237,6 +240,7 @@ export const useResourceStore = defineStore('resource', () => {
         updates.categoryId !== undefined ||
         updates.format !== undefined ||
         updates.vipLevel !== undefined ||
+        updates.pricingType !== undefined ||
         updates.sortType !== undefined
       );
 
@@ -267,6 +271,7 @@ export const useResourceStore = defineStore('resource', () => {
       categoryId: undefined,
       format: undefined,
       vipLevel: undefined,
+      pricingType: undefined,
       sortType: 'comprehensive',
       pageNum: 1,
       pageSize: 21
@@ -311,6 +316,14 @@ export const useResourceStore = defineStore('resource', () => {
    */
   function setVipLevel(vipLevel: number | undefined): void {
     updateSearchParams({ vipLevel });
+  }
+
+  /**
+   * 设置定价类型
+   * @param pricingType 定价类型: 0-免费, 1-付费积分, 2-VIP专属
+   */
+  function setPricingType(pricingType: number | undefined): void {
+    updateSearchParams({ pricingType });
   }
 
   /**
@@ -427,6 +440,7 @@ export const useResourceStore = defineStore('resource', () => {
       categoryId: undefined,
       format: undefined,
       vipLevel: undefined,
+      pricingType: undefined,
       sortType: 'comprehensive',
       pageNum: 1,
       pageSize: 21
@@ -463,6 +477,7 @@ export const useResourceStore = defineStore('resource', () => {
     setCategory,
     setFormat,
     setVipLevel,
+    setPricingType,
     setSortType,
     setPageNum,
     setPageSize,

@@ -95,7 +95,12 @@ export class StatisticsService {
    */
   async getTrends(days: number = 7) {
     try {
-      const trends: any[] = [];
+      const trends: Array<{
+        date: string;
+        newUsers: number;
+        newResources: number;
+        downloads: number;
+      }> = [];
       const now = new Date();
 
       for (let i = days - 1; i >= 0; i--) {
@@ -257,7 +262,13 @@ export class StatisticsService {
    */
   async getRevenueStats(days: number = 30) {
     try {
-      const stats: any[] = [];
+      const stats: Array<{
+        date: string;
+        vipRevenue: number;
+        pointsRevenue: number;
+        totalRevenue: number;
+        orderCount: number;
+      }> = [];
       const now = new Date();
 
       for (let i = days - 1; i >= 0; i--) {
@@ -303,6 +314,163 @@ export class StatisticsService {
     } catch (error) {
       logger.error('获取收入统计失败:', error);
       throw new Error('获取收入统计失败');
+    }
+  }
+
+  /**
+   * 获取充值统计
+   * @param dimension 统计维度: day, week, month, year
+   * @param startDate 开始日期
+   * @param endDate 结束日期
+   */
+  async getRechargeStatistics(dimension: string = 'day', startDate?: string, endDate?: string) {
+    try {
+      const end = endDate ? new Date(endDate) : new Date();
+      const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // 获取充值订单统计
+      const orders = await prisma.recharge_orders.findMany({
+        where: {
+          created_at: { gte: start, lte: end },
+          payment_status: 1, // 已支付
+        },
+        select: {
+          amount: true,
+          total_points: true,
+          created_at: true,
+          user_id: true,
+        },
+      });
+
+      // 按维度分组统计
+      const groupedStats = new Map<string, { amount: number; points: number; count: number; users: Set<string> }>();
+
+      for (const order of orders) {
+        const key = this.getDateKey(order.created_at, dimension);
+        const existing = groupedStats.get(key) || { amount: 0, points: 0, count: 0, users: new Set<string>() };
+        existing.amount += Number(order.amount);
+        existing.points += order.total_points;
+        existing.count += 1;
+        existing.users.add(order.user_id);
+        groupedStats.set(key, existing);
+      }
+
+      // 转换为数组
+      const stats = Array.from(groupedStats.entries()).map(([date, data]) => ({
+        date,
+        totalAmount: data.amount,
+        totalPoints: data.points,
+        orderCount: data.count,
+        userCount: data.users.size,
+      })).sort((a, b) => a.date.localeCompare(b.date));
+
+      // 汇总数据
+      const summary = {
+        totalAmount: orders.reduce((sum, o) => sum + Number(o.amount), 0),
+        totalPoints: orders.reduce((sum, o) => sum + o.total_points, 0),
+        totalOrders: orders.length,
+        totalUsers: new Set(orders.map(o => o.user_id)).size,
+      };
+
+      return { stats, summary };
+    } catch (error) {
+      logger.error('获取充值统计失败:', error);
+      throw new Error('获取充值统计失败');
+    }
+  }
+
+  /**
+   * 获取积分流水统计
+   * @param dimension 统计维度: day, week, month, year
+   * @param startDate 开始日期
+   * @param endDate 结束日期
+   */
+  async getPointsFlowStatistics(dimension: string = 'day', startDate?: string, endDate?: string) {
+    try {
+      const end = endDate ? new Date(endDate) : new Date();
+      const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // 获取积分变动记录 (使用正确的表名 points_records)
+      const records = await prisma.points_records.findMany({
+        where: {
+          created_at: { gte: start, lte: end },
+        },
+        select: {
+          points_change: true,
+          change_type: true,
+          created_at: true,
+        },
+      });
+
+      // 按维度分组统计
+      const groupedStats = new Map<string, { earned: number; consumed: number }>();
+
+      for (const record of records) {
+        const key = this.getDateKey(record.created_at, dimension);
+        const existing = groupedStats.get(key) || { earned: 0, consumed: 0 };
+        if (record.points_change > 0) {
+          existing.earned += record.points_change;
+        } else {
+          existing.consumed += Math.abs(record.points_change);
+        }
+        groupedStats.set(key, existing);
+      }
+
+      // 转换为数组
+      const stats = Array.from(groupedStats.entries()).map(([date, data]) => ({
+        date,
+        earned: data.earned,
+        consumed: data.consumed,
+        net: data.earned - data.consumed,
+      })).sort((a, b) => a.date.localeCompare(b.date));
+
+      // 汇总数据
+      const totalEarned = records
+        .filter(r => r.points_change > 0)
+        .reduce((sum: number, r) => sum + r.points_change, 0);
+      const totalConsumed = records
+        .filter(r => r.points_change < 0)
+        .reduce((sum: number, r) => sum + Math.abs(r.points_change), 0);
+
+      // 按类型统计
+      const byType = new Map<string, number>();
+      for (const record of records) {
+        const type = record.change_type;
+        byType.set(type, (byType.get(type) || 0) + record.points_change);
+      }
+
+      const summary = {
+        totalEarned,
+        totalConsumed,
+        netChange: totalEarned - totalConsumed,
+        byType: Object.fromEntries(byType),
+      };
+
+      return { stats, summary };
+    } catch (error) {
+      logger.error('获取积分流水统计失败:', error);
+      throw new Error('获取积分流水统计失败');
+    }
+  }
+
+  /**
+   * 根据维度获取日期键
+   */
+  private getDateKey(date: Date, dimension: string): string {
+    const d = new Date(date);
+    switch (dimension) {
+      case 'year':
+        return d.getFullYear().toString();
+      case 'month':
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      case 'week': {
+        const weekStart = new Date(d);
+        weekStart.setDate(d.getDate() - d.getDay());
+        return weekStart.toISOString().split('T')[0];
+      }
+      case 'day':
+      default:
+        return d.toISOString().split('T')[0];
     }
   }
 }

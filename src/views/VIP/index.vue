@@ -10,7 +10,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Check, Star, Download, Promotion, Service } from '@element-plus/icons-vue';
+import { Check, Star, Download, Promotion, Service, ArrowLeft } from '@element-plus/icons-vue';
 import { useVipStore } from '@/pinia/vipStore';
 import { useUserStore } from '@/pinia/userStore';
 import VipIcon from '@/components/business/VipIcon.vue';
@@ -68,6 +68,17 @@ const successInfo = ref<{
 
 /** 来源资源ID */
 const sourceResourceId = computed(() => route.query.source as string || '');
+
+/**
+ * 返回上一页
+ */
+function handleGoBack() {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/');
+  }
+}
 
 /** 是否已登录 */
 const isLoggedIn = computed(() => userStore.isLoggedIn);
@@ -292,6 +303,13 @@ onMounted(() => {
   <div class="vip-page">
     <!-- 页面头部 -->
     <div class="vip-header">
+      <!-- 返回按钮 -->
+      <el-button
+        class="back-btn"
+        :icon="ArrowLeft"
+        circle
+        @click="handleGoBack"
+      />
       <div class="header-content">
         <h1 class="page-title">
           <VipIcon
@@ -592,9 +610,28 @@ onMounted(() => {
 }
 
 .vip-header {
+  position: relative;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 60px 20px 80px;
   text-align: center;
+}
+
+/* 返回按钮 */
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
 }
 
 .header-content {
@@ -909,6 +946,13 @@ onMounted(() => {
 @media (max-width: 768px) {
   .vip-header {
     padding: 40px 16px 60px;
+  }
+  
+  .back-btn {
+    top: 16px;
+    left: 16px;
+    width: 36px;
+    height: 36px;
   }
   
   .page-title {

@@ -169,6 +169,15 @@ export function getPointsProducts(params?: {
 }
 
 /**
+ * 获取单个积分商品详情
+ * @param productId 商品ID
+ * @returns Promise<PointsProduct>
+ */
+export function getPointsProductById(productId: string): Promise<ApiResponse<PointsProduct & { exchangeCount: number }>> {
+  return get<PointsProduct & { exchangeCount: number }>(`/points/products/${productId}`);
+}
+
+/**
  * 兑换积分商品
  * @param data 兑换信息
  * @returns Promise<PointsExchangeRecord>

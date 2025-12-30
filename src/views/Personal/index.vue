@@ -3,10 +3,12 @@
     <!-- 用户信息卡片 -->
     <div class="user-info-card">
       <div class="user-avatar">
-        <el-avatar
-          :size="80"
-          :src="userInfo?.avatar"
-        />
+        <VipBadge :status="vipStatus" position="bottom-right" size="medium">
+          <el-avatar
+            :size="80"
+            :src="userInfo?.avatar"
+          />
+        </VipBadge>
         <el-button
           class="edit-avatar-btn"
           circle
@@ -26,6 +28,7 @@
             effect="dark"
             class="vip-badge"
           >
+            <VipIcon status="active" size="small" :show-lifetime-label="false" />
             VIP {{ vipLevelText }}
           </el-tag>
         </div>
@@ -381,6 +384,121 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 积分明细弹窗 -->
+    <el-dialog
+      v-model="pointsDetailVisible"
+      title="积分明细"
+      width="800px"
+      :close-on-click-modal="false"
+      @close="closePointsDetail"
+    >
+      <div
+        v-loading="pointsRecordsLoading"
+        class="points-detail-content"
+      >
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+          <el-radio-group
+            v-model="pointsRecordsFilter"
+            size="small"
+            @change="handleFilterChange"
+          >
+            <el-radio-button value="">
+              全部
+            </el-radio-button>
+            <el-radio-button value="recharge">
+              充值
+            </el-radio-button>
+            <el-radio-button value="consume">
+              消费
+            </el-radio-button>
+            <el-radio-button value="exchange">
+              兑换
+            </el-radio-button>
+            <el-radio-button value="signin">
+              签到
+            </el-radio-button>
+            <el-radio-button value="task">
+              任务
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <el-table
+          :data="pointsRecordsList"
+          stripe
+          style="width: 100%"
+        >
+          <el-table-column
+            prop="description"
+            label="说明"
+            min-width="200"
+          />
+          <el-table-column
+            prop="changeType"
+            label="类型"
+            width="100"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-tag
+                :type="row.pointsChange > 0 ? 'success' : 'warning'"
+                size="small"
+              >
+                {{ getChangeTypeText(row.changeType) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="pointsChange"
+            label="积分变化"
+            width="120"
+            align="center"
+          >
+            <template #default="{ row }">
+              <span :class="getChangeTypeClass(row.pointsChange)">
+                {{ row.pointsChange > 0 ? '+' : '' }}{{ row.pointsChange }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="pointsBalance"
+            label="余额"
+            width="100"
+            align="center"
+          />
+          <el-table-column
+            prop="createdAt"
+            label="时间"
+            width="180"
+            align="center"
+          >
+            <template #default="{ row }">
+              {{ formatTime(row.createdAt) }}
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-empty
+          v-if="!pointsRecordsLoading && pointsRecordsList.length === 0"
+          description="暂无积分记录"
+        />
+
+        <div
+          v-if="pointsRecordsTotal > pointsRecordsPageSize"
+          class="pagination-wrapper"
+        >
+          <el-pagination
+            v-model:current-page="pointsRecordsPage"
+            :page-size="pointsRecordsPageSize"
+            :total="pointsRecordsTotal"
+            layout="total, prev, pager, next"
+            @current-change="handlePointsPageChange"
+          />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -390,13 +508,15 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Camera, Star, Coin, List, Plus, Download, Service, Discount, Warning, Share } from '@element-plus/icons-vue';
 import { useUserStore } from '@/pinia/userStore';
-import { getDownloadHistory, getUploadHistory, getVIPInfo } from '@/api/personal';
+import { getDownloadHistory, getUploadHistory, getVIPInfo, getUserInfo } from '@/api/personal';
+import { getPointsRecords, type PointsRecord } from '@/api/points';
 import { usePointsSync } from '@/composables/usePointsSync';
 import { formatTime, formatRelativeTime } from '@/utils/format';
 import { maskPhone } from '@/utils/security';
 import { getFullImageUrl } from '@/utils/url';
 import VipStatusCard from '@/components/business/VipStatusCard.vue';
 import VipIcon from '@/components/business/VipIcon.vue';
+import VipBadge from '@/components/business/VipBadge.vue';
 import type { DownloadRecord, UploadRecord, VIPInfo } from '@/types/models';
 
 const router = useRouter();
@@ -462,8 +582,25 @@ const vipDaysRemaining = computed(() => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 });
 
+// VIP状态计算（用于VipBadge组件）
+const vipStatus = computed(() => {
+  if (vipInfo.value.vipLevel <= 0) return 'none';
+  if (vipInfo.value.isLifetime) return 'lifetime';
+  if (vipInfo.value.vipLevel >= 3) return 'lifetime';
+  return 'active';
+});
+
 const editProfileVisible = ref(false);
 const uploadAvatarVisible = ref(false);
+
+// 积分明细弹窗相关
+const pointsDetailVisible = ref(false);
+const pointsRecordsLoading = ref(false);
+const pointsRecordsList = ref<PointsRecord[]>([]);
+const pointsRecordsTotal = ref(0);
+const pointsRecordsPage = ref(1);
+const pointsRecordsPageSize = ref(20);
+const pointsRecordsFilter = ref<string>(''); // 筛选类型
 
 /** 错误类型定义 */
 interface ApiError {
@@ -636,7 +773,9 @@ function goToPoints() {
 }
 
 function goToPointsDetail() {
-  router.push('/points');
+  // 打开积分明细弹窗
+  pointsDetailVisible.value = true;
+  fetchPointsRecords();
 }
 
 function goToPointsRecharge() {
@@ -743,15 +882,127 @@ function handleShareResource(record: UploadRecord) {
   });
 }
 
+/**
+ * 获取积分明细记录
+ */
+async function fetchPointsRecords() {
+  pointsRecordsLoading.value = true;
+  try {
+    const params: any = {
+      pageNum: pointsRecordsPage.value,
+      pageSize: pointsRecordsPageSize.value
+    };
+    
+    // 如果有筛选条件，添加到参数中
+    if (pointsRecordsFilter.value) {
+      params.changeType = pointsRecordsFilter.value;
+    }
+    
+    const res = await getPointsRecords(params);
+
+    if (res.code === 200 || res.code === 0) {
+      pointsRecordsList.value = res.data.list;
+      pointsRecordsTotal.value = res.data.total;
+    }
+  } catch (error: unknown) {
+    const err = error as ApiError;
+    console.error('获取积分明细失败:', err);
+    
+    if (!isAuthError(err)) {
+      ElMessage.warning('暂时无法加载积分明细，请稍后再试');
+    }
+    
+    pointsRecordsList.value = [];
+    pointsRecordsTotal.value = 0;
+  } finally {
+    pointsRecordsLoading.value = false;
+  }
+}
+
+/**
+ * 积分类型筛选变化
+ */
+function handleFilterChange() {
+  pointsRecordsPage.value = 1;
+  fetchPointsRecords();
+}
+
+/**
+ * 积分明细分页变化
+ */
+function handlePointsPageChange(page: number) {
+  pointsRecordsPage.value = page;
+  fetchPointsRecords();
+}
+
+/**
+ * 获取积分变化类型文本
+ */
+function getChangeTypeText(changeType: string): string {
+  const typeMap: Record<string, string> = {
+    'earn': '获得',
+    'consume': '消费',
+    'exchange': '兑换',
+    'recharge': '充值',
+    'refund': '退款',
+    'adjust': '调整',
+    'signin': '签到',
+    'task': '任务',
+    'download': '下载',
+    'upload': '上传'
+  };
+  return typeMap[changeType] || changeType;
+}
+
+/**
+ * 获取积分变化类型样式
+ */
+function getChangeTypeClass(pointsChange: number): string {
+  return pointsChange > 0 ? 'points-increase' : 'points-decrease';
+}
+
+/**
+ * 关闭积分明细弹窗
+ */
+function closePointsDetail() {
+  pointsDetailVisible.value = false;
+  pointsRecordsPage.value = 1;
+  pointsRecordsFilter.value = '';
+}
+
+/**
+ * 刷新用户信息（从服务器获取最新数据）
+ * 确保VIP状态等信息是最新的
+ */
+async function refreshUserInfo() {
+  try {
+    const res = await getUserInfo();
+    if (res.code === 200 || res.code === 0) {
+      // 更新用户Store中的信息
+      userStore.setUserInfo(res.data);
+    }
+  } catch (error: unknown) {
+    const err = error as ApiError;
+    console.error('刷新用户信息失败:', err);
+    // 不显示错误消息，静默失败
+  }
+}
+
 onMounted(() => {
+  // 进入页面时刷新用户信息，确保VIP状态等是最新的
+  refreshUserInfo();
   // 进入页面时刷新积分余额，确保与数据库一致
   refreshPoints(true);
+  // 获取VIP信息，确保VIP标签正确显示
+  fetchVIPInfo();
   fetchDownloadHistory();
 });
 
-// 页面被激活时（从缓存恢复）也刷新积分
+// 页面被激活时（从缓存恢复）也刷新用户信息和积分
 onActivated(() => {
+  refreshUserInfo();
   refreshPoints(true);
+  fetchVIPInfo();
 });
 </script>
 
@@ -798,6 +1049,36 @@ onActivated(() => {
       margin: 0;
       font-size: 24px;
       font-weight: 600;
+    }
+
+    .vip-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 12px !important;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1 !important;
+      height: auto !important;
+      
+      :deep(.el-tag__content) {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        line-height: 1;
+      }
+      
+      :deep(.vip-icon-wrapper) {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+      }
+      
+      :deep(.vip-icon) {
+        display: block;
+        vertical-align: middle;
+      }
     }
   }
 
@@ -1136,6 +1417,56 @@ onActivated(() => {
   }
 }
 
+/* 积分明细弹窗样式 */
+.points-detail-content {
+  /* 固定高度，防止切换Tab时晃动 */
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+
+  .filter-bar {
+    flex-shrink: 0; /* 防止筛选栏被压缩 */
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f5f7fa;
+    border-radius: 8px;
+  }
+
+  /* 表格容器自适应剩余空间 */
+  :deep(.el-table) {
+    flex: 1;
+    overflow: auto;
+  }
+
+  /* 空状态居中显示 */
+  :deep(.el-empty) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .points-increase {
+    color: #67c23a;
+    font-weight: 600;
+  }
+
+  .points-decrease {
+    color: #f56c6c;
+    font-weight: 600;
+  }
+
+  .pagination-wrapper {
+    flex-shrink: 0; /* 防止分页器被压缩 */
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid #ebeef5;
+  }
+}
+
 @media (max-width: 768px) {
   .personal-center {
     padding: 16px;
@@ -1153,6 +1484,25 @@ onActivated(() => {
 
   .resource-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* 移动端积分明细弹窗调整 */
+  .points-detail-content {
+    height: 450px; /* 移动端稍微降低高度 */
+
+    .filter-bar {
+      padding: 8px;
+
+      :deep(.el-radio-group) {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      :deep(.el-radio-button) {
+        flex: 0 0 calc(33.333% - 6px);
+      }
+    }
   }
 }
 </style>

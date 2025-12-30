@@ -422,3 +422,182 @@ export async function getResourceHistoryHandler(req: Request, res: Response): Pr
     res.status(500).json({ code: 500, message: '服务器错误' });
   }
 }
+
+
+/**
+ * 审核员调整资源定价
+ * POST /api/v1/admin/audit/:resourceId/adjust-pricing
+ * 
+ * 需求: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6
+ */
+export async function adjustResourcePricingHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    // 注意：requestFieldTransform 中间件会将 camelCase 转换为 snake_case
+    const { pricing_type: pricingType, points_cost: pointsCost, reason } = req.body;
+    const operatorId = (req as Request & { user?: { userId: string } }).user?.userId;
+    
+    if (!operatorId) {
+      res.status(401).json({ code: 401, message: '未登录' });
+      return;
+    }
+    
+    // 验证定价类型
+    if (pricingType === undefined || ![0, 1, 2].includes(pricingType)) {
+      res.status(400).json({
+        code: 'INVALID_PRICING_TYPE',
+        message: '无效的定价类型，必须是 0(免费)、1(付费积分) 或 2(VIP专属)',
+      });
+      return;
+    }
+    
+    // 如果是付费积分类型，验证积分值
+    if (pricingType === 1) {
+      if (pointsCost === undefined || typeof pointsCost !== 'number') {
+        res.status(400).json({
+          code: 'INVALID_POINTS_COST',
+          message: '付费积分类型必须提供积分值',
+        });
+        return;
+      }
+      
+      // 验证积分值范围和步长
+      const { validatePointsCost } = await import('../services/resourcePricingService.js');
+      const validation = validatePointsCost(pointsCost);
+      if (!validation.valid && validation.adjustedValue === undefined) {
+        res.status(400).json({
+          code: validation.errorCode,
+          message: validation.errorMessage,
+        });
+        return;
+      }
+    }
+    
+    // 验证修改原因
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      res.status(400).json({
+        code: 'REASON_REQUIRED',
+        message: '请填写定价调整原因',
+      });
+      return;
+    }
+    
+    // 获取资源信息
+    const resource = await prisma.resources.findUnique({
+      where: { resource_id: resourceId },
+      select: {
+        resource_id: true,
+        title: true,
+        user_id: true,
+        pricing_type: true,
+        points_cost: true,
+      },
+    });
+    
+    if (!resource) {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    // 保存旧的定价信息
+    const oldPricingType = resource.pricing_type;
+    const oldPointsCost = resource.points_cost;
+    
+    // 调用定价服务设置新定价
+    const { setPricing } = await import('../services/resourcePricingService.js');
+    await setPricing({
+      resourceId,
+      pricingType,
+      pointsCost: pricingType === 1 ? pointsCost : 0,
+      operatorId,
+      operatorType: 'auditor',
+      reason: reason.trim(),
+    });
+    
+    // 发送定价调整通知给上传者
+    if (resource.user_id) {
+      const { sendPricingAdjustedNotification } = await import('../services/notificationService.js');
+      await sendPricingAdjustedNotification({
+        userId: resource.user_id,
+        resourceId,
+        resourceTitle: resource.title,
+        oldPricingType,
+        newPricingType: pricingType,
+        oldPointsCost,
+        newPointsCost: pricingType === 1 ? pointsCost : 0,
+        reason: reason.trim(),
+        adjustedBy: operatorId,
+      });
+    }
+    
+    res.json({
+      code: 0,
+      message: '定价调整成功',
+      data: {
+        resourceId,
+        oldPricingType,
+        newPricingType: pricingType,
+        oldPointsCost,
+        newPointsCost: pricingType === 1 ? pointsCost : 0,
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '服务器错误';
+    
+    if (errorMessage === '资源不存在') {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    console.error('定价调整失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}
+
+/**
+ * 获取资源定价变更历史
+ * GET /api/v1/admin/audit/:resourceId/pricing-history
+ * 
+ * 需求: 8.6
+ */
+export async function getPricingHistoryHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { resourceId } = req.params;
+    const { pageNum = '1', pageSize = '10' } = req.query;
+    
+    // 检查资源是否存在
+    const resource = await prisma.resources.findUnique({
+      where: { resource_id: resourceId },
+      select: { resource_id: true },
+    });
+    
+    if (!resource) {
+      res.status(404).json({
+        code: AuditErrorCodes.AUDIT_001.code,
+        message: AuditErrorCodes.AUDIT_001.message,
+      });
+      return;
+    }
+    
+    const { getPricingChangeHistory } = await import('../services/resourcePricingService.js');
+    const result = await getPricingChangeHistory(resourceId, {
+      pageNum: Number(pageNum),
+      pageSize: Number(pageSize),
+    });
+    
+    res.json({
+      code: 0,
+      message: '获取成功',
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取定价历史失败:', error);
+    res.status(500).json({ code: 500, message: '服务器错误' });
+  }
+}

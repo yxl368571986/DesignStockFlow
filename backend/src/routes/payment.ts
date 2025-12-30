@@ -10,6 +10,10 @@ import {
   alipayNotify,
   alipayReturn,
 } from '../controllers/vipPaymentController.js';
+import {
+  wechatRechargeCallback,
+  alipayRechargeCallback,
+} from '../controllers/rechargeController.js';
 import { authenticate as authenticateToken } from '../middlewares/auth.js';
 
 const router = Router();
@@ -59,5 +63,21 @@ router.post('/alipay/notify', alipayNotify);
  * GET /api/v1/payment/alipay/return
  */
 router.get('/alipay/return', alipayReturn);
+
+/**
+ * 充值支付回调接口
+ */
+
+/**
+ * 微信充值支付回调
+ * POST /api/v1/payment/recharge/wechat/callback
+ */
+router.post('/recharge/wechat/callback', wechatRechargeCallback);
+
+/**
+ * 支付宝充值支付回调
+ * POST /api/v1/payment/recharge/alipay/callback
+ */
+router.post('/recharge/alipay/callback', alipayRechargeCallback);
 
 export default router;

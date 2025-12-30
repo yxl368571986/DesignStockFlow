@@ -6,6 +6,7 @@
  * - VIP权限守卫（检查VIP等级）
  * - 页面标题更新
  * - 页面访问日志
+ * - 用户信息定期刷新（确保VIP状态等信息是最新的）
  *
  * 需求: 需求2.4、需求4.2（权限控制）
  */
@@ -13,6 +14,12 @@
 import type { Router, RouteLocationNormalized } from 'vue-router';
 import { useUserStore } from '@/pinia/userStore';
 import { ElMessage } from 'element-plus';
+import { getUserInfo } from '@/api/personal';
+
+// 上次刷新用户信息的时间戳
+let lastUserInfoRefresh = 0;
+// 刷新间隔（5分钟）
+const USER_INFO_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 /**
  * 检查用户是否已登录
@@ -20,6 +27,36 @@ import { ElMessage } from 'element-plus';
 function checkAuth(): boolean {
   const userStore = useUserStore();
   return userStore.isLoggedIn;
+}
+
+/**
+ * 刷新用户信息（从服务器获取最新数据）
+ * 确保VIP状态等信息是最新的
+ */
+async function refreshUserInfoIfNeeded(): Promise<void> {
+  const userStore = useUserStore();
+  
+  // 未登录则不刷新
+  if (!userStore.isLoggedIn) {
+    return;
+  }
+  
+  // 检查是否需要刷新（距离上次刷新超过5分钟）
+  const now = Date.now();
+  if (now - lastUserInfoRefresh < USER_INFO_REFRESH_INTERVAL) {
+    return;
+  }
+  
+  try {
+    const res = await getUserInfo();
+    if (res.code === 200 || res.code === 0) {
+      userStore.setUserInfo(res.data);
+      lastUserInfoRefresh = now;
+    }
+  } catch (error) {
+    // 静默失败，不影响用户体验
+    console.error('刷新用户信息失败:', error);
+  }
 }
 
 /**
@@ -79,14 +116,17 @@ function logNavigation(from: RouteLocationNormalized, to: RouteLocationNormalize
  */
 export function setupRouterGuards(router: Router): void {
   // 全局前置守卫
-  router.beforeEach((to, from, next) => {
+  router.beforeEach(async (to, from, next) => {
     // 1. 更新页面标题
     updateTitle(to);
     
     // 2. 记录访问日志
     logNavigation(from, to);
     
-    // 3. 如果已登录且访问登录/注册页面，重定向到首页
+    // 3. 刷新用户信息（如果已登录且距离上次刷新超过5分钟）
+    await refreshUserInfoIfNeeded();
+    
+    // 4. 如果已登录且访问登录/注册页面，重定向到首页
     if (checkAuth() && (to.path === '/login' || to.path === '/register')) {
       const redirect = to.query.redirect as string;
       if (redirect) {
@@ -97,7 +137,7 @@ export function setupRouterGuards(router: Router): void {
       return;
     }
     
-    // 4. 检查是否需要管理员权限（优先检查，因为admin路由也需要认证）
+    // 5. 检查是否需要管理员权限（优先检查，因为admin路由也需要认证）
     if (to.meta.requiresAdmin || to.path.startsWith('/admin')) {
       // 先检查是否登录
       if (!checkAuth()) {
@@ -117,7 +157,7 @@ export function setupRouterGuards(router: Router): void {
       }
     }
     
-    // 5. 检查是否需要认证
+    // 6. 检查是否需要认证
     if (to.meta.requiresAuth) {
       if (!checkAuth()) {
         ElMessage.warning('请先登录');
@@ -129,7 +169,7 @@ export function setupRouterGuards(router: Router): void {
       }
     }
     
-    // 6. 检查是否需要VIP权限
+    // 7. 检查是否需要VIP权限
     if (to.meta.requiresVIP) {
       const requiredVIPLevel = (to.meta.vipLevel as number) || 1;
       if (!checkVIP(requiredVIPLevel)) {
@@ -139,7 +179,7 @@ export function setupRouterGuards(router: Router): void {
       }
     }
     
-    // 7. 通过所有检查，允许导航
+    // 8. 通过所有检查，允许导航
     next();
   });
 

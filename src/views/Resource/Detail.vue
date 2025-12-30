@@ -23,7 +23,8 @@ import {
   getResourceDetail,
   getRecommendedResources,
   collectResource,
-  uncollectResource
+  uncollectResource,
+  checkFavoriteStatus
 } from '@/api/resource';
 import { getMyPointsInfo } from '@/api/points';
 import { formatFileSize, formatDownloadCount, formatTime } from '@/utils/format';
@@ -171,23 +172,6 @@ function getApiBaseUrl(): string {
 }
 
 /**
- * 判断是否为图片文件格式
- */
-function isImageFormat(format: string | null | undefined): boolean {
-  if (!format) return false;
-  const imageFormats = ['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'BMP'];
-  return imageFormats.includes(format.toUpperCase());
-}
-
-/**
- * 判断 URL 是否为占位图
- */
-function isPlaceholderUrl(url: string | null | undefined): boolean {
-  if (!url) return true;
-  return url.includes('picsum.photos') || url.includes('placeholder');
-}
-
-/**
  * 处理图片URL，将相对路径转换为完整 URL
  * 
  * 逻辑说明：
@@ -225,14 +209,19 @@ function getImageUrl(imagePath: string | undefined | null, resourceId: string, i
 
 /**
  * 当前预览图URL
+ * 
+ * 逻辑说明：
+ * - 索引0始终显示封面图（与卡片封面保持一致）
+ * - 索引1及以后显示预览图列表中的图片
+ * - 这样确保卡片封面和详情页首图一致
  */
 const currentImageUrl = computed(() => {
   if (!resource.value) {
     return getStablePlaceholderUrl('default', 0);
   }
   
-  // 如果没有预览图或预览图为空，使用封面图
-  if (!resource.value.previewImages || resource.value.previewImages.length === 0) {
+  // 索引0始终显示封面图，确保与卡片封面一致
+  if (currentImageIndex.value === 0) {
     return getImageUrl(
       resource.value.cover, 
       resource.value.resourceId, 
@@ -240,29 +229,49 @@ const currentImageUrl = computed(() => {
     );
   }
   
-  // 有预览图时，使用预览图
+  // 索引1及以后显示预览图（索引需要减1来对应预览图数组）
+  const previewIndex = currentImageIndex.value - 1;
+  if (resource.value.previewImages && resource.value.previewImages.length > previewIndex) {
+    return getImageUrl(
+      resource.value.previewImages[previewIndex],
+      resource.value.resourceId,
+      currentImageIndex.value
+    );
+  }
+  
+  // 如果索引超出范围，回退到封面图
   return getImageUrl(
-    resource.value.previewImages[currentImageIndex.value],
-    resource.value.resourceId,
-    currentImageIndex.value
+    resource.value.cover, 
+    resource.value.resourceId, 
+    0
   );
 });
 
 /**
  * 处理后的预览图列表
+ * 
+ * 逻辑说明：
+ * - 第一张始终是封面图（与卡片封面保持一致）
+ * - 后续是预览图列表中的图片
+ * - 这样确保缩略图列表和主图显示逻辑一致
  */
 const processedPreviewImages = computed(() => {
   if (!resource.value) return [];
   
-  // 如果预览图为空，返回空数组
+  // 封面图作为第一张
+  const coverImage = getImageUrl(resource.value.cover, resource.value.resourceId, 0);
+  
+  // 如果没有预览图，只返回封面图
   if (!resource.value.previewImages || resource.value.previewImages.length === 0) {
-    return [];
+    return [coverImage];
   }
   
-  // 处理每张预览图
-  return resource.value.previewImages.map((img, index) => 
-    getImageUrl(img, resource.value!.resourceId, index)
+  // 封面图 + 预览图列表
+  const previewImages = resource.value.previewImages.map((img, index) => 
+    getImageUrl(img, resource.value!.resourceId, index + 1)
   );
+  
+  return [coverImage, ...previewImages];
 });
 
 /**
@@ -305,10 +314,11 @@ const watermarkText = computed(() => {
 });
 
 /**
- * 是否显示积分信息（仅登录用户显示）
+ * 是否显示积分信息（所有用户都显示）
  */
 const showPointsInfo = computed(() => {
-  return userStore.isLoggedIn;
+  // 只要资源有积分消耗（非免费资源），就显示积分信息
+  return true;
 });
 
 /**
@@ -365,9 +375,10 @@ async function fetchResourceDetail() {
       // 更新页面标题
       document.title = `${resource.value.title} - 星潮设计`;
 
-      // 如果用户已登录，获取积分信息
+      // 如果用户已登录，获取积分信息和收藏状态
       if (userStore.isLoggedIn) {
         fetchUserPointsInfo();
+        fetchFavoriteStatus();
       }
 
       // 获取推荐资源
@@ -403,6 +414,24 @@ async function fetchUserPointsInfo() {
     console.error('获取积分信息失败:', error);
   } finally {
     pointsLoading.value = false;
+  }
+}
+
+/**
+ * 获取收藏状态
+ */
+async function fetchFavoriteStatus() {
+  if (!userStore.isLoggedIn || !resourceId.value) {
+    return;
+  }
+
+  try {
+    const res = await checkFavoriteStatus(resourceId.value);
+    if (res.code === 200 && res.data) {
+      isCollected.value = res.data.isFavorited;
+    }
+  } catch (error) {
+    console.error('获取收藏状态失败:', error);
   }
 }
 
@@ -478,12 +507,34 @@ async function handleCollect() {
       if (res.code === 200) {
         isCollected.value = true;
         ElMessage.success('收藏成功');
+      } else if (res.code === 400 && res.msg === '已收藏该资源') {
+        // 已经收藏过，更新本地状态
+        isCollected.value = true;
+        ElMessage.info('该资源已在收藏列表中');
       } else {
         ElMessage.error(res.msg || '收藏失败');
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('收藏操作失败:', error);
+    // 处理后端返回的400错误（已收藏）- axios错误对象结构
+    if (error && typeof error === 'object') {
+      const axiosError = error as { response?: { data?: { code?: number; msg?: string } } };
+      const responseData = axiosError.response?.data;
+      
+      // 检查是否是"已收藏该资源"的错误
+      if (responseData?.code === 400 && responseData?.msg === '已收藏该资源') {
+        isCollected.value = true;
+        ElMessage.info('该资源已在收藏列表中');
+        return;
+      }
+      
+      // 显示后端返回的错误消息
+      if (responseData?.msg) {
+        ElMessage.error(responseData.msg);
+        return;
+      }
+    }
     ElMessage.error('操作失败，请稍后重试');
   } finally {
     collectLoading.value = false;
@@ -808,14 +859,14 @@ watch(
             </el-button>
           </div>
 
-          <!-- 积分信息区域（仅登录用户显示） -->
+          <!-- 积分信息区域（所有用户可见） -->
           <div
             v-if="showPointsInfo"
             class="points-section"
           >
             <!-- VIP用户显示VIP特权说明 -->
             <div
-              v-if="userStore.isVIP"
+              v-if="userStore.isLoggedIn && userStore.isVIP"
               class="vip-privilege-box"
             >
               <div class="privilege-header">
@@ -836,7 +887,7 @@ watch(
               </div>
             </div>
 
-            <!-- 普通用户显示积分消耗信息 -->
+            <!-- 普通用户或未登录用户显示积分消耗信息 -->
             <div
               v-else
               class="points-info-box"
@@ -852,7 +903,8 @@ watch(
                   <span class="points-label">所需积分：</span>
                   <span class="points-value required">{{ pointsCost }} 积分</span>
                 </div>
-                <div class="points-row">
+                <!-- 登录用户显示当前余额 -->
+                <div v-if="userStore.isLoggedIn" class="points-row">
                   <span class="points-label">当前余额：</span>
                   <span
                     class="points-value balance"
@@ -861,8 +913,12 @@ watch(
                     {{ pointsBalance }} 积分
                   </span>
                 </div>
+                <!-- 未登录用户显示登录提示 -->
+                <div v-else class="points-row login-tip">
+                  <span>登录后查看积分余额</span>
+                </div>
                 <div
-                  v-if="isPointsInsufficient"
+                  v-if="userStore.isLoggedIn && isPointsInsufficient"
                   class="points-row insufficient-tip"
                 >
                   <el-icon><Warning /></el-icon>
@@ -870,7 +926,7 @@ watch(
                 </div>
               </div>
               <el-button
-                v-if="isPointsInsufficient"
+                v-if="userStore.isLoggedIn && isPointsInsufficient"
                 type="warning"
                 size="small"
                 class="get-points-btn"
@@ -1359,6 +1415,17 @@ watch(
 .get-points-btn {
   width: 100%;
   margin-top: 8px;
+}
+
+/* 未登录用户提示 */
+.points-row.login-tip {
+  padding: 8px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae0ff;
+  border-radius: 4px;
+  color: #1677ff;
+  font-size: 13px;
+  justify-content: center;
 }
 
 /* 描述区域 */

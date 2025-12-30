@@ -15,6 +15,7 @@ import {
   Warning
 } from '@element-plus/icons-vue';
 import { getRefundList, processRefund } from '@/api/adminVip';
+import { getRefundStatusText, getRefundStatusType } from '@/utils/status';
 
 /** 退款申请状态 */
 type RefundStatus = 'pending' | 'approved' | 'rejected' | 'processing' | 'completed' | 'failed';
@@ -259,28 +260,12 @@ async function handleExport() {
 
 /** 获取状态文本 */
 function getStatusText(status: RefundStatus): string {
-  const map: Record<RefundStatus, string> = {
-    pending: '待处理',
-    approved: '已批准',
-    rejected: '已拒绝',
-    processing: '处理中',
-    completed: '已完成',
-    failed: '退款失败'
-  };
-  return map[status] || status;
+  return getRefundStatusText(status);
 }
 
 /** 获取状态类型 */
 function getStatusType(status: RefundStatus): 'warning' | 'success' | 'danger' | 'info' {
-  const map: Record<RefundStatus, 'warning' | 'success' | 'danger' | 'info'> = {
-    pending: 'warning',
-    approved: 'success',
-    rejected: 'danger',
-    processing: 'info',
-    completed: 'success',
-    failed: 'danger'
-  };
-  return map[status] || 'info';
+  return getRefundStatusType(status);
 }
 
 /** 分页变化 */

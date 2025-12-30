@@ -16,6 +16,10 @@ interface UploadMetadata {
   tags: string[];
   description: string;
   vipLevel: number;
+  /** 定价类型: 0-免费, 1-付费积分, 2-VIP专属 */
+  pricingType?: number;
+  /** 积分价格 (仅当pricingType=1时有效) */
+  pointsCost?: number;
 }
 
 class ResourceController {
@@ -34,6 +38,8 @@ class ResourceController {
         category_id,
         vipLevel,
         vip_level,
+        pricingType,
+        pricing_type,
         keyword,
         sortBy,
         sort_by,
@@ -46,6 +52,7 @@ class ResourceController {
       const actualPageSize = pageSize || page_size || '20';
       const actualCategoryId = categoryId || category_id;
       const actualVipLevel = vipLevel || vip_level;
+      const actualPricingType = pricingType || pricing_type;
       const actualSortBy = sortBy || sort_by || 'comprehensive';
       const actualFormat = format || file_format;
 
@@ -58,11 +65,16 @@ class ResourceController {
         ? parseInt(actualVipLevel as string, 10) 
         : undefined;
       
+      const parsedPricingType = actualPricingType !== undefined && actualPricingType !== '' 
+        ? parseInt(actualPricingType as string, 10) 
+        : undefined;
+      
       const result = await resourceService.getResourceList({
         pageNum: parseInt(actualPageNum as string, 10),
         pageSize: parseInt(actualPageSize as string, 10),
         categoryId: actualCategoryId as string,
         vipLevel: parsedVipLevel,
+        pricingType: parsedPricingType,
         keyword: keyword as string,
         sortBy: actualSortBy as any,
         format: actualFormat as string,
@@ -101,10 +113,14 @@ class ResourceController {
       }
 
       // 获取表单数据
-      const { title, description, categoryId, tags, vipLevel } = req.body;
+      const { title, description, categoryId, tags, vipLevel, pricingType, pointsCost } = req.body;
+
+      // 记录接收到的数据用于调试
+      logger.info('上传请求数据:', { title, categoryId, description: description?.substring(0, 50), pricingType, pointsCost });
 
       // 验证必填字段
       if (!title || !categoryId) {
+        logger.warn('上传验证失败: 标题或分类为空', { title, categoryId });
         error(res, '标题和分类不能为空', 400);
         return;
       }
@@ -113,6 +129,21 @@ class ResourceController {
       let parsedTags: string[] = [];
       if (tags) {
         parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+      }
+
+      // 解析定价类型和积分价格
+      const parsedPricingType = pricingType !== undefined ? parseInt(pricingType, 10) : 0;
+      let parsedPointsCost = pointsCost !== undefined ? parseInt(pointsCost, 10) : 0;
+      
+      // 验证积分价格（仅当定价类型为付费积分时）
+      if (parsedPricingType === 1) {
+        if (parsedPointsCost < 5 || parsedPointsCost > 100 || parsedPointsCost % 5 !== 0) {
+          error(res, '积分价格必须在5-100之间，且为5的倍数', 400);
+          return;
+        }
+      } else {
+        // 非付费积分类型，积分价格设为0
+        parsedPointsCost = 0;
       }
 
       // 获取预览图（如果有）
@@ -125,6 +156,8 @@ class ResourceController {
         categoryId,
         tags: parsedTags,
         vipLevel: vipLevel ? parseInt(vipLevel, 10) : 0,
+        pricingType: parsedPricingType,
+        pointsCost: parsedPointsCost,
         userId: req.user.userId,
         file: uploadedFile,
         previewImages,
@@ -323,6 +356,20 @@ class ResourceController {
         return;
       }
 
+      // 解析定价类型和积分价格
+      const pricingType = metadata.pricingType ?? 0;
+      let pointsCost = metadata.pointsCost ?? 0;
+      
+      // 验证积分价格（仅当定价类型为付费积分时）
+      if (pricingType === 1) {
+        if (pointsCost < 5 || pointsCost > 100 || pointsCost % 5 !== 0) {
+          error(res, '积分价格必须在5-100之间，且为5的倍数', 400);
+          return;
+        }
+      } else {
+        pointsCost = 0;
+      }
+
       // 调用服务创建资源
       const result = await resourceService.createResourceFromChunkUpload({
         uploadId,
@@ -332,6 +379,8 @@ class ResourceController {
         categoryId: metadata.categoryId,
         tags: metadata.tags || [],
         vipLevel: metadata.vipLevel || 0,
+        pricingType,
+        pointsCost,
       });
 
       success(res, result, '资源创建成功，等待审核');

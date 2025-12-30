@@ -291,7 +291,9 @@ export function useUpload() {
       categoryId: metadata.categoryId, // 分类ID不需要净化（来自下拉选择）
       tags: metadata.tags.map((tag) => sanitizeInput(tag)),
       description: sanitizeInput(metadata.description),
-      vipLevel: metadata.vipLevel // 数字不需要净化
+      vipLevel: metadata.vipLevel, // 数字不需要净化
+      pricingType: metadata.pricingType ?? 0, // 定价类型
+      pointsCost: metadata.pointsCost ?? 0 // 积分价格
     };
 
     // 标记为上传中
@@ -553,6 +555,8 @@ export function useUpload() {
       formData.append('tags', JSON.stringify(metadata.tags));
       formData.append('description', metadata.description);
       formData.append('vipLevel', metadata.vipLevel.toString());
+      formData.append('pricingType', (metadata.pricingType ?? 0).toString());
+      formData.append('pointsCost', (metadata.pointsCost ?? 0).toString());
 
       ElMessage.success('开始上传...');
 

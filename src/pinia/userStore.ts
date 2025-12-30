@@ -15,6 +15,7 @@ import {
   removeTokenExpireTime,
   isTokenExpired
 } from '@/utils/security';
+import { getUserInfo as fetchUserInfoFromAPI } from '@/api/personal';
 
 // LocalStorage键名常量
 const USER_INFO_KEY = 'user_info';
@@ -292,6 +293,30 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  /**
+   * 刷新用户信息
+   * 从服务器获取最新的用户信息并更新本地状态
+   * @returns Promise<void>
+   */
+  async function refreshUserInfo(): Promise<void> {
+    if (!token.value) {
+      console.warn('[UserStore] 无法刷新用户信息：未登录');
+      return;
+    }
+
+    try {
+      const res = await fetchUserInfoFromAPI();
+      if (res.code === 200 && res.data) {
+        setUserInfo(res.data);
+        console.log('[UserStore] 用户信息已刷新');
+      } else {
+        console.error('[UserStore] 刷新用户信息失败:', res.msg);
+      }
+    } catch (error) {
+      console.error('[UserStore] 刷新用户信息异常:', error);
+    }
+  }
+
   // 初始化时检查Token
   initToken();
 
@@ -315,6 +340,7 @@ export const useUserStore = defineStore('user', () => {
     updateUserInfo,
     logout,
     initToken,
-    checkVIPStatus
+    checkVIPStatus,
+    refreshUserInfo
   };
 });

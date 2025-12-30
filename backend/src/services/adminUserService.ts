@@ -4,6 +4,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { logger } from '@/utils/logger.js';
+import * as notificationService from './notificationService.js';
 
 const prisma = new PrismaClient();
 
@@ -313,6 +314,42 @@ export class AdminUserService {
       `调整VIP等级为${vipLevel}${vipExpireAt ? `，到期时间：${vipExpireAt.toISOString()}` : ''}${reason ? `，原因：${reason}` : ''}`
     );
 
+    // 发送VIP调整通知给用户
+    const vipLevelNames: Record<number, string> = {
+      0: '普通用户',
+      1: '月度VIP',
+      2: '季度VIP',
+      3: '年度VIP'
+    };
+    const newLevelName = vipLevelNames[vipLevel] || `VIP${vipLevel}`;
+    const oldLevelName = vipLevelNames[user.vip_level] || `VIP${user.vip_level}`;
+    
+    if (vipLevel > 0 && vipLevel > user.vip_level) {
+      // 升级VIP，发送恭喜通知
+      await notificationService.sendSystemNotification({
+        userId,
+        title: '🎉 恭喜您成为尊贵的VIP会员！',
+        content: `您已成功升级为${newLevelName}！现在您可以享受VIP专属特权：每日50次下载额度、专属VIP标识、优先客服通道等。${vipExpireAt ? `VIP有效期至：${vipExpireAt.toLocaleDateString('zh-CN')}` : ''}`,
+        linkUrl: '/vip'
+      });
+    } else if (vipLevel > 0 && vipLevel !== user.vip_level) {
+      // VIP等级变更
+      await notificationService.sendSystemNotification({
+        userId,
+        title: 'VIP等级变更通知',
+        content: `您的VIP等级已从${oldLevelName}调整为${newLevelName}。${vipExpireAt ? `VIP有效期至：${vipExpireAt.toLocaleDateString('zh-CN')}` : ''}${reason ? `调整原因：${reason}` : ''}`,
+        linkUrl: '/vip'
+      });
+    } else if (vipLevel === 0 && user.vip_level > 0) {
+      // 取消VIP
+      await notificationService.sendSystemNotification({
+        userId,
+        title: 'VIP状态变更通知',
+        content: `您的VIP会员资格已被取消。${reason ? `原因：${reason}` : ''}如有疑问，请联系客服。`,
+        linkUrl: '/vip'
+      });
+    }
+
     logger.info(`用户VIP调整成功: ${userId}, VIP等级: ${vipLevel}, 操作者: ${operatorId}`);
   }
 
@@ -333,32 +370,68 @@ export class AdminUserService {
       throw new Error('用户不存在');
     }
 
-    const newBalance = user.points_balance + pointsChange;
+    const pointsBefore = user.points_balance;
+    const newBalance = pointsBefore + pointsChange;
 
     if (newBalance < 0) {
       throw new Error('积分余额不足，无法扣除');
     }
 
-    await prisma.users.update({
-      where: { user_id: userId },
-      data: {
-        points_balance: newBalance,
-        points_total: pointsChange > 0 ? user.points_total + pointsChange : user.points_total,
-        updated_at: new Date(),
-      },
+    // 使用事务确保数据一致性
+    await prisma.$transaction(async (tx) => {
+      // 更新用户积分
+      await tx.users.update({
+        where: { user_id: userId },
+        data: {
+          points_balance: newBalance,
+          points_total: pointsChange > 0 ? user.points_total + pointsChange : user.points_total,
+          updated_at: new Date(),
+        },
+      });
+
+      // 创建积分变动记录
+      await tx.points_records.create({
+        data: {
+          user_id: userId,
+          points_change: pointsChange,
+          points_balance: newBalance,
+          change_type: 'adjust',
+          source: 'admin_adjust',
+          description: `管理员调整积分：${reason}`,
+        },
+      });
+
+      // 创建积分调整日志（用于积分调整日志页面查询）
+      await tx.points_adjustment_logs.create({
+        data: {
+          admin_id: operatorId,
+          target_user_id: userId,
+          adjustment_type: pointsChange > 0 ? 'add' : 'deduct',
+          points_change: pointsChange,
+          points_before: pointsBefore,
+          points_after: newBalance,
+          reason: reason,
+        },
+      });
+
+      // 发送通知给用户
+      const notificationTitle = pointsChange > 0 ? '积分增加通知' : '积分扣除通知';
+      const notificationContent = pointsChange > 0
+        ? `您的积分增加了 ${pointsChange}，原因：${reason}。当前积分余额：${newBalance}`
+        : `您的积分被扣除 ${Math.abs(pointsChange)}，原因：${reason}。当前积分余额：${newBalance}`;
+
+      await tx.notifications.create({
+        data: {
+          user_id: userId,
+          title: notificationTitle,
+          content: notificationContent,
+          type: 'points_adjustment',
+          is_read: false,
+        },
+      });
     });
 
-    await prisma.points_records.create({
-      data: {
-        user_id: userId,
-        points_change: pointsChange,
-        points_balance: newBalance,
-        change_type: 'adjust',
-        source: 'admin_adjust',
-        description: `管理员调整积分：${reason}`,
-      },
-    });
-
+    // 创建管理员操作日志
     await this.createOperationLog(
       operatorId,
       userId,

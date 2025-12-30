@@ -90,11 +90,9 @@ axiosRetry(service, {
   retries: 3, // 重试3次
   retryDelay: axiosRetry.exponentialDelay, // 指数退避
   retryCondition: (error: AxiosError) => {
-    // 网络错误或5xx错误时重试
-    return (
-      axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-      (error.response?.status !== undefined && error.response.status >= 500)
-    );
+    // 只对网络错误或幂等请求错误进行重试
+    // 不对 500 错误重试，因为可能是业务逻辑错误（如文件不存在）
+    return axiosRetry.isNetworkOrIdempotentRequestError(error);
   }
 });
 
@@ -333,7 +331,8 @@ service.interceptors.response.use(
           ElMessage.error('请求的资源不存在');
           break;
         case 500:
-          ElMessage.error('服务器错误，请稍后重试');
+          // 显示后端返回的具体错误消息，如果没有则显示通用消息
+          ElMessage.error(message || '服务器错误，请稍后重试');
           break;
         case 502:
         case 503:
@@ -479,6 +478,7 @@ export function upload<T = any>(
       headers: {
         'Content-Type': 'multipart/form-data'
       },
+      timeout: 5 * 60 * 1000, // 上传超时设置为5分钟，支持大文件上传
       onUploadProgress
     })
     .then((res) => res.data as ApiResponse<T>);

@@ -14,6 +14,8 @@ import {
   getResourceDetailsHandler,
   getAuditLogsHandler,
   getResourceHistoryHandler,
+  adjustResourcePricingHandler,
+  getPricingHistoryHandler,
 } from '@/controllers/auditController.js';
 
 const router = Router();
@@ -123,6 +125,34 @@ router.post(
   authenticate,
   requirePermissions(['audit:reject']),
   rejectHandler
+);
+
+/**
+ * 调整资源定价
+ * POST /api/v1/admin/audit/:resourceId/adjust-pricing
+ * 需要权限：audit:approve（审核员权限）
+ * 
+ * 需求: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6
+ */
+router.post(
+  '/:resourceId/adjust-pricing',
+  authenticate,
+  requirePermissions(['audit:approve']),
+  adjustResourcePricingHandler
+);
+
+/**
+ * 获取资源定价变更历史
+ * GET /api/v1/admin/audit/:resourceId/pricing-history
+ * 需要权限：audit:view
+ * 
+ * 需求: 8.6
+ */
+router.get(
+  '/:resourceId/pricing-history',
+  authenticate,
+  requirePermissions(['audit:view']),
+  getPricingHistoryHandler
 );
 
 export default router;

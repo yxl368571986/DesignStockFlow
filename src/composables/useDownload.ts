@@ -10,6 +10,7 @@ import { useUserStore } from '@/pinia/userStore';
 import { downloadResource } from '@/api/resource';
 import { getMyPointsInfo } from '@/api/points';
 import { usePointsSync } from './usePointsSync';
+import { getToken } from '@/utils/security';
 
 /**
  * 下载组合式函数
@@ -290,40 +291,62 @@ export function useDownload() {
 
       // 检查响应
       if (response.code === 200 && response.data?.downloadUrl) {
-        // 触发浏览器下载
-        let downloadUrl = response.data.downloadUrl;
+        // 使用新的文件流下载端点，强制浏览器下载
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+        // 移除末尾的斜杠
+        const baseUrl = apiBaseUrl.replace(/\/$/, '');
+        const fileDownloadUrl = `${baseUrl}/resources/${resourceId}/download/file`;
 
-        // 如果是相对路径，转换为后端服务器的完整URL
-        if (downloadUrl.startsWith('/')) {
-          // 获取后端API基础URL
-          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-          // 移除API路径前缀，只保留基础域名
-          const backendBaseUrl = apiBaseUrl.replace(/\/api\/v1\/?$/, '');
-          downloadUrl = `${backendBaseUrl}${downloadUrl}`;
+        // 从Cookie获取token用于认证
+        const token = getToken();
+        
+        // 使用fetch下载文件，带上认证头
+        const downloadResponse = await fetch(fileDownloadUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
+        });
+
+        if (!downloadResponse.ok) {
+          const errorData = await downloadResponse.json().catch(() => ({}));
+          error.value = errorData.message || '下载失败';
+          ElMessage.error(error.value);
+          return { success: false, error: error.value };
         }
 
-        // 创建隐藏的a标签触发下载
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.style.display = 'none';
-
-        // 设置下载属性
-        try {
-          const url = new URL(downloadUrl);
-          // 对于后端服务器的文件，设置download属性
-          if (url.pathname.startsWith('/files/') || url.pathname.startsWith('/uploads/')) {
-            link.download = '';
-            // 设置target为_blank，在新窗口打开下载
-            link.target = '_blank';
+        // 从响应头获取文件名
+        const contentDisposition = downloadResponse.headers.get('Content-Disposition');
+        let fileName = response.data.fileName || 'download';
+        if (contentDisposition) {
+          // 解析 filename*=UTF-8''xxx 格式
+          const filenameMatch = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+          if (filenameMatch) {
+            fileName = decodeURIComponent(filenameMatch[1]);
+          } else {
+            // 尝试解析普通 filename="xxx" 格式
+            const simpleMatch = contentDisposition.match(/filename="?([^";\n]+)"?/i);
+            if (simpleMatch) {
+              fileName = simpleMatch[1];
+            }
           }
-        } catch {
-          // URL解析失败，直接使用href
-          link.target = '_blank';
         }
 
+        // 获取文件blob
+        const blob = await downloadResponse.blob();
+        
+        // 创建下载链接
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // 释放URL对象
+        window.URL.revokeObjectURL(url);
 
         // 显示成功提示
         ElMessage.success('下载成功');

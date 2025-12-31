@@ -9,7 +9,7 @@ import type { SiteConfig, BannerInfo, CategoryInfo, AnnouncementInfo } from '@/t
 import {
   getSiteConfig as getSiteConfigAPI,
   getBanners as getBannersAPI,
-  getCategories as getCategoriesAPI,
+  getCategoryTree as getCategoryTreeAPI,
   getAnnouncements as getAnnouncementsAPI
 } from '@/api/content';
 
@@ -200,6 +200,15 @@ export const useConfigStore = defineStore('config', () => {
    */
   const getSubCategories = computed(() => {
     return (parentId: string) => {
+      // 先从一级分类中查找
+      const parentCategory = categories.value.find((cat) => cat.categoryId === parentId);
+      
+      // 如果找到父分类且有children,返回children
+      if (parentCategory && parentCategory.children && parentCategory.children.length > 0) {
+        return parentCategory.children.sort((a, b) => a.sort - b.sort);
+      }
+      
+      // 否则从所有分类中筛选(兼容旧的扁平结构)
       return categories.value
         .filter((cat) => cat.parentId === parentId)
         .sort((a, b) => a.sort - b.sort);
@@ -307,7 +316,7 @@ export const useConfigStore = defineStore('config', () => {
     error.value.categories = null;
 
     try {
-      const res = await getCategoriesAPI();
+      const res = await getCategoryTreeAPI();
       if (res.code === 200 && res.data) {
         categories.value = res.data;
         // 设置缓存

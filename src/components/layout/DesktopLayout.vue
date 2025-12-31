@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight, ShoppingCart } from '@element-plus/icons-vue';
+import { User, Upload, Download, Setting, Coin, ArrowLeft, ArrowRight, ShoppingCart, ArrowDown } from '@element-plus/icons-vue';
 import SearchBar from '@/components/business/SearchBar.vue';
 import NotificationBell from '@/components/business/NotificationBell.vue';
 import VipBadge from '@/components/business/VipBadge.vue';
@@ -34,6 +34,7 @@ const configStore = useConfigStore();
 const isHeaderFixed = ref(false); // 导航栏是否固定
 const showUserMenu = ref(false); // 是否显示用户菜单
 const sidebarCollapsed = ref(false); // 侧边栏是否折叠
+const expandedCategories = ref<string[]>([]); // 展开的分类ID列表
 
 // 计算属性：是否显示侧边栏（仅搜索页面不显示）
 const showSidebar = computed(() => {
@@ -153,9 +154,72 @@ function handleLogout() {
 
 /**
  * 跳转到分类页面
+ * @param categoryId 分类ID
+ * @param section 区域标识：'hot' 或 'all'
  */
-function goToCategory(categoryId: string) {
+function goToCategory(categoryId: string, section: 'hot' | 'all' = 'all') {
+  // 判断当前是否在资源列表页
+  const isResourceListPage = route.path === '/resource' || route.name === 'ResourceList';
+  
+  // 如果有子分类
+  if (hasSubCategories(categoryId)) {
+    // 如果在资源列表页且当前已选中这个分类，只切换展开/收起状态
+    if (isResourceListPage && route.query.categoryId === categoryId) {
+      toggleCategoryExpand(categoryId, section);
+      return;
+    }
+    
+    // 如果未选中，展开子分类（但继续执行跳转逻辑）
+    if (!isCategoryExpanded(categoryId, section)) {
+      const key = `${section}-${categoryId}`;
+      expandedCategories.value.push(key);
+    }
+    // 注意：这里不return，继续执行下面的跳转逻辑
+  }
+  
+  // 跳转到资源列表页并筛选该分类
   router.push(`/resource?categoryId=${categoryId}`);
+}
+
+/**
+ * 判断是否有子分类
+ */
+function hasSubCategories(categoryId: string): boolean {
+  return configStore.getSubCategories(categoryId).length > 0;
+}
+
+/**
+ * 获取子分类列表
+ */
+function getSubCategories(categoryId: string) {
+  return configStore.getSubCategories(categoryId);
+}
+
+/**
+ * 切换分类展开/收起
+ * @param categoryId 分类ID
+ * @param section 区域标识：'hot' 或 'all'
+ */
+function toggleCategoryExpand(categoryId: string, section: 'hot' | 'all' = 'all') {
+  const key = `${section}-${categoryId}`;
+  const index = expandedCategories.value.indexOf(key);
+  if (index > -1) {
+    // 已展开，收起
+    expandedCategories.value.splice(index, 1);
+  } else {
+    // 未展开，展开
+    expandedCategories.value.push(key);
+  }
+}
+
+/**
+ * 判断分类是否展开
+ * @param categoryId 分类ID
+ * @param section 区域标识：'hot' 或 'all'
+ */
+function isCategoryExpanded(categoryId: string, section: 'hot' | 'all' = 'all') {
+  const key = `${section}-${categoryId}`;
+  return expandedCategories.value.includes(key);
 }
 
 /**
@@ -404,22 +468,52 @@ onBeforeUnmount(() => {
               <li
                 v-for="category in hotCategories"
                 :key="category.categoryId"
-                class="category-item"
-                @click="goToCategory(category.categoryId)"
+                class="category-item-group"
               >
-                <img
-                  v-if="category.icon && category.icon.startsWith('/')"
-                  :src="category.icon"
-                  :alt="category.categoryName"
-                  class="category-icon-img"
-                  @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                <div
+                  class="category-item"
+                  :class="{ 'has-children': hasSubCategories(category.categoryId), 'expanded': isCategoryExpanded(category.categoryId, 'hot') }"
+                  @click="goToCategory(category.categoryId, 'hot')"
                 >
-                <span
-                  v-else
-                  class="category-icon"
-                >{{ category.icon || '📁' }}</span>
-                <span class="category-name">{{ category.categoryName }}</span>
-                <span class="category-count">{{ category.resourceCount || 0 }}</span>
+                  <img
+                    v-if="category.icon && category.icon.startsWith('/')"
+                    :src="category.icon"
+                    :alt="category.categoryName"
+                    class="category-icon-img"
+                    @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                  >
+                  <span
+                    v-else
+                    class="category-icon"
+                  >{{ category.icon || '📁' }}</span>
+                  <span class="category-name">{{ category.categoryName }}</span>
+                  <span class="category-count">{{ category.resourceCount || 0 }}</span>
+                  <el-icon
+                    v-if="hasSubCategories(category.categoryId)"
+                    class="expand-icon"
+                    :class="{ 'expanded': isCategoryExpanded(category.categoryId, 'hot') }"
+                  >
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                
+                <!-- 二级分类列表 -->
+                <transition name="sub-category-slide">
+                  <ul
+                    v-if="isCategoryExpanded(category.categoryId, 'hot') && hasSubCategories(category.categoryId)"
+                    class="sub-category-list"
+                  >
+                    <li
+                      v-for="subCategory in getSubCategories(category.categoryId)"
+                      :key="subCategory.categoryId"
+                      class="sub-category-item"
+                      @click.stop="router.push(`/resource?categoryId=${subCategory.categoryId}`)"
+                    >
+                      <span class="sub-category-name">{{ subCategory.categoryName }}</span>
+                      <span class="sub-category-count">{{ subCategory.resourceCount || 0 }}</span>
+                    </li>
+                  </ul>
+                </transition>
               </li>
             </ul>
           </div>
@@ -432,22 +526,52 @@ onBeforeUnmount(() => {
               <li
                 v-for="category in primaryCategories"
                 :key="category.categoryId"
-                class="category-item"
-                @click="goToCategory(category.categoryId)"
+                class="category-item-group"
               >
-                <img
-                  v-if="category.icon && category.icon.startsWith('/')"
-                  :src="category.icon"
-                  :alt="category.categoryName"
-                  class="category-icon-img"
-                  @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                <div
+                  class="category-item"
+                  :class="{ 'has-children': hasSubCategories(category.categoryId), 'expanded': isCategoryExpanded(category.categoryId, 'all') }"
+                  @click="goToCategory(category.categoryId, 'all')"
                 >
-                <span
-                  v-else
-                  class="category-icon"
-                >{{ category.icon || '📁' }}</span>
-                <span class="category-name">{{ category.categoryName }}</span>
-                <span class="category-count">{{ category.resourceCount || 0 }}</span>
+                  <img
+                    v-if="category.icon && category.icon.startsWith('/')"
+                    :src="category.icon"
+                    :alt="category.categoryName"
+                    class="category-icon-img"
+                    @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+                  >
+                  <span
+                    v-else
+                    class="category-icon"
+                  >{{ category.icon || '📁' }}</span>
+                  <span class="category-name">{{ category.categoryName }}</span>
+                  <span class="category-count">{{ category.resourceCount || 0 }}</span>
+                  <el-icon
+                    v-if="hasSubCategories(category.categoryId)"
+                    class="expand-icon"
+                    :class="{ 'expanded': isCategoryExpanded(category.categoryId, 'all') }"
+                  >
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                
+                <!-- 二级分类列表 -->
+                <transition name="sub-category-slide">
+                  <ul
+                    v-if="isCategoryExpanded(category.categoryId, 'all') && hasSubCategories(category.categoryId)"
+                    class="sub-category-list"
+                  >
+                    <li
+                      v-for="subCategory in getSubCategories(category.categoryId)"
+                      :key="subCategory.categoryId"
+                      class="sub-category-item"
+                      @click.stop="router.push(`/resource?categoryId=${subCategory.categoryId}`)"
+                    >
+                      <span class="sub-category-name">{{ subCategory.categoryName }}</span>
+                      <span class="sub-category-count">{{ subCategory.resourceCount || 0 }}</span>
+                    </li>
+                  </ul>
+                </transition>
               </li>
             </ul>
           </div>
@@ -984,11 +1108,28 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+}
+
+.category-item.has-children {
+  padding-right: 36px;
 }
 
 .category-item:hover {
   background: #f5f7fa;
   transform: translateX(4px);
+}
+
+.expand-icon {
+  position: absolute;
+  right: 10px;
+  font-size: 14px;
+  color: #909399;
+  transition: transform 0.3s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
 }
 
 .category-icon {
@@ -1016,6 +1157,66 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #909399;
   flex-shrink: 0;
+}
+
+/* 二级分类列表 */
+.sub-category-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  padding-left: 32px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sub-category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fafafa;
+}
+
+.sub-category-item:hover {
+  background: #e8f4ff;
+  transform: translateX(4px);
+}
+
+.sub-category-name {
+  font-size: 13px;
+  color: #606266;
+  flex: 1;
+}
+
+.sub-category-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 二级分类展开动画 */
+.sub-category-slide-enter-active,
+.sub-category-slide-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.sub-category-slide-enter-from,
+.sub-category-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.sub-category-slide-enter-to,
+.sub-category-slide-leave-from {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 4px;
 }
 
 /* 快捷链接 */

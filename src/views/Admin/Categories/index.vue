@@ -198,11 +198,53 @@
         </el-form-item>
 
         <el-form-item label="图标" prop="icon">
-          <el-input
-            v-model="formData.icon"
-            placeholder="请输入图标路径或图标名称"
-          />
-          <div class="form-tip">例如：/icons/ui.svg 或 Element Plus 图标名称</div>
+          <div class="icon-upload-container">
+            <!-- 图标预览 -->
+            <div v-if="formData.icon" class="icon-preview">
+              <img
+                v-if="formData.icon.startsWith('/')"
+                :src="formData.icon"
+                alt="图标预览"
+                class="preview-image"
+              >
+              <el-icon v-else class="preview-icon">
+                <component :is="formData.icon" />
+              </el-icon>
+              <el-button
+                type="danger"
+                :icon="Delete"
+                circle
+                size="small"
+                class="remove-icon-btn"
+                @click="handleRemoveIcon"
+              />
+            </div>
+
+            <!-- 上传按钮 -->
+            <el-upload
+              class="icon-uploader"
+              :action="`${apiBaseUrl}/api/v1/upload/single`"
+              :headers="uploadHeaders"
+              :show-file-list="false"
+              :before-upload="beforeIconUpload"
+              :on-success="handleIconUploadSuccess"
+              :on-error="handleIconUploadError"
+              accept="image/svg+xml,image/png,image/jpeg,image/jpg"
+            >
+              <el-button :icon="Upload" type="primary">上传图标</el-button>
+            </el-upload>
+
+            <!-- 或者输入路径 -->
+            <div class="icon-input-group">
+              <span class="input-label">或输入路径：</span>
+              <el-input
+                v-model="formData.icon"
+                placeholder="/icons/ui.svg"
+                style="flex: 1"
+              />
+            </div>
+          </div>
+          <div class="form-tip">支持上传 SVG、PNG、JPG 格式图标，或输入图标路径</div>
         </el-form-item>
 
         <el-form-item label="排序值" prop="sortOrder">
@@ -240,8 +282,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus';
-import { Plus, Edit, Delete, Sort, Check, Close, Rank, Folder } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Sort, Check, Close, Rank, Folder, Upload } from '@element-plus/icons-vue';
 import Sortable from 'sortablejs';
+import { useUserStore } from '@/pinia/userStore';
 import {
   getCategoryTree,
   createCategory,
@@ -253,6 +296,17 @@ import {
   type UpdateCategoryParams,
   type SortDataItem
 } from '@/api/category';
+
+// ========== Composables ==========
+const userStore = useUserStore();
+
+// API基础URL
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+// 上传请求头
+const uploadHeaders = computed(() => ({
+  Authorization: `Bearer ${userStore.token}`
+}));
 
 // 加载状态
 const loading = ref(false);
@@ -566,6 +620,51 @@ const handleDelete = async (category: Category) => {
   }
 };
 
+/**
+ * 上传前校验
+ */
+const beforeIconUpload = (file: File) => {
+  const isImage = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg'].includes(file.type);
+  const isLt2M = file.size / 1024 / 1024 < 2;
+
+  if (!isImage) {
+    ElMessage.error('只能上传 SVG、PNG、JPG 格式的图标!');
+    return false;
+  }
+  if (!isLt2M) {
+    ElMessage.error('图标大小不能超过 2MB!');
+    return false;
+  }
+  return true;
+};
+
+/**
+ * 图标上传成功
+ */
+const handleIconUploadSuccess = (response: any) => {
+  if (response.code === 200 && response.data) {
+    formData.value.icon = response.data.url;
+    ElMessage.success('图标上传成功');
+  } else {
+    ElMessage.error(response.msg || '图标上传失败');
+  }
+};
+
+/**
+ * 图标上传失败
+ */
+const handleIconUploadError = (error: any) => {
+  console.error('图标上传失败:', error);
+  ElMessage.error('图标上传失败，请重试');
+};
+
+/**
+ * 移除图标
+ */
+const handleRemoveIcon = () => {
+  formData.value.icon = '';
+};
+
 // 初始化
 onMounted(() => {
   loadCategoryTree();
@@ -661,6 +760,59 @@ onMounted(() => {
     font-size: 12px;
     color: #999;
     margin-top: 4px;
+  }
+
+  .icon-upload-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .icon-preview {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border: 2px dashed #dcdfe6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f7fa;
+
+    .preview-image {
+      max-width: 60px;
+      max-height: 60px;
+      object-fit: contain;
+    }
+
+    .preview-icon {
+      font-size: 40px;
+      color: #165dff;
+    }
+
+    .remove-icon-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+    }
+  }
+
+  .icon-uploader {
+    :deep(.el-upload) {
+      width: auto;
+    }
+  }
+
+  .icon-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .input-label {
+      font-size: 14px;
+      color: #606266;
+      white-space: nowrap;
+    }
   }
 
   .ml-2 {

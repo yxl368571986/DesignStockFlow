@@ -1,158 +1,19 @@
-<!--
-  分类导航组件
-  功能：
-  - 横向滚动分类列表（展示一级分类）
-  - 当前选中分类高亮
-  - 点击切换分类（更新路由参数）
-  - 支持二级分类展开（悬浮或点击展开子分类）
-  - 显示分类图标、名称、资源数量
-  - 热门分类显示"热门"标签
-  - 移动端支持左右滑动
-  - 从configStore获取分类数据
--->
-
-<template>
-  <div class="category-nav">
-    <!-- 分类滚动容器 -->
-    <div
-      ref="scrollContainer"
-      class="category-scroll-container"
-      @mousedown="handleMouseDown"
-      @mousemove="handleMouseMove"
-      @mouseup="handleMouseUp"
-      @mouseleave="handleMouseUp"
-      @touchstart="handleTouchStart"
-      @touchmove="handleTouchMove"
-      @touchend="handleTouchEnd"
-    >
-      <div class="category-list">
-        <!-- 全部分类 -->
-        <div
-          class="category-item"
-          :class="{ active: !currentCategoryId }"
-          @click="handleCategoryClick(null)"
-        >
-          <div class="category-content">
-            <el-icon class="category-icon">
-              <Grid />
-            </el-icon>
-            <span class="category-name">全部</span>
-          </div>
-        </div>
-
-        <!-- 一级分类列表 -->
-        <div
-          v-for="category in primaryCategories"
-          :key="category.categoryId"
-          class="category-item"
-          :class="{
-            active: currentCategoryId === category.categoryId,
-            'has-children': hasSubCategories(category.categoryId)
-          }"
-          @click="handleCategoryClick(category.categoryId)"
-          @mouseenter="handleCategoryHover(category.categoryId)"
-          @mouseleave="handleCategoryLeave"
-        >
-          <div class="category-content">
-            <!-- 分类图标 -->
-            <img
-              v-if="category.icon && category.icon.startsWith('/')"
-              :src="category.icon"
-              :alt="category.categoryName"
-              class="category-icon-img"
-              @error="handleIconError"
-            >
-            <el-icon
-              v-else
-              class="category-icon"
-            >
-              <Folder />
-            </el-icon>
-
-            <!-- 分类名称 -->
-            <span class="category-name">{{ category.categoryName }}</span>
-
-            <!-- 资源数量 -->
-            <span class="category-count">({{ category.resourceCount }})</span>
-
-            <!-- 热门标签 -->
-            <span
-              v-if="category.isHot"
-              class="hot-badge"
-            >热门</span>
-
-            <!-- 二级分类指示器 -->
-            <el-icon
-              v-if="hasSubCategories(category.categoryId)"
-              class="expand-icon"
-            >
-              <ArrowDown />
-            </el-icon>
-          </div>
-
-          <!-- 二级分类下拉菜单 -->
-          <transition name="dropdown">
-            <div
-              v-if="
-                hoveredCategoryId === category.categoryId && hasSubCategories(category.categoryId)
-              "
-              class="sub-category-dropdown"
-              @click.stop
-            >
-              <div
-                v-for="subCategory in getSubCategories(category.categoryId)"
-                :key="subCategory.categoryId"
-                class="sub-category-item"
-                :class="{ active: currentCategoryId === subCategory.categoryId }"
-                @click="handleCategoryClick(subCategory.categoryId)"
-              >
-                <span class="sub-category-name">{{ subCategory.categoryName }}</span>
-                <span class="sub-category-count">({{ subCategory.resourceCount }})</span>
-              </div>
-            </div>
-          </transition>
-        </div>
-      </div>
-    </div>
-
-    <!-- 左右滚动按钮（桌面端） -->
-    <div
-      v-if="showScrollButtons"
-      class="scroll-buttons"
-    >
-      <button
-        class="scroll-button scroll-left"
-        :disabled="!canScrollLeft"
-        @click="scrollLeft"
-      >
-        <el-icon><ArrowLeft /></el-icon>
-      </button>
-      <button
-        class="scroll-button scroll-right"
-        :disabled="!canScrollRight"
-        @click="scrollRight"
-      >
-        <el-icon><ArrowRight /></el-icon>
-      </button>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+/**
+ * 分类导航组件
+ * 功能：
+ * - 垂直列表展示分类（左侧边栏）
+ * - 当前选中分类高亮
+ * - 点击切换分类（更新路由参数）
+ * - 支持二级分类展开（点击展开子分类）
+ * - 显示分类图标、名称、资源数量
+ * - 热门分类单独显示
+ * - 从configStore获取分类数据
+ */
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useConfigStore } from '@/pinia/configStore';
-import { Grid, Folder, ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
-
-// ========== Props ==========
-interface Props {
-  // 是否显示滚动按钮（桌面端）
-  showScrollButtons?: boolean;
-}
-
-withDefaults(defineProps<Props>(), {
-  showScrollButtons: true
-});
+import { Grid, Folder, ArrowDown } from '@element-plus/icons-vue';
 
 // ========== Emits ==========
 const emit = defineEmits<{
@@ -165,15 +26,7 @@ const route = useRoute();
 const configStore = useConfigStore();
 
 // ========== 状态 ==========
-const scrollContainer = ref<HTMLElement | null>(null);
-const hoveredCategoryId = ref<string | null>(null);
-const canScrollLeft = ref(false);
-const canScrollRight = ref(false);
-
-// 拖拽滚动状态
-const isDragging = ref(false);
-const startX = ref(0);
-const scrollLeftStart = ref(0);
+const expandedCategories = ref<string[]>([]); // 展开的分类ID列表
 
 // ========== 计算属性 ==========
 
@@ -185,35 +38,63 @@ const currentCategoryId = computed(() => {
 });
 
 /**
- * 一级分类列表
+ * 热门分类列表
  */
-const primaryCategories = computed(() => {
-  return configStore.primaryCategories;
+const hotCategories = computed(() => {
+  return configStore.hotCategories;
 });
 
 /**
- * 获取子分类
+ * 全部分类列表(非热门)
  */
-const getSubCategories = (parentId: string) => {
-  return configStore.getSubCategories(parentId);
-};
-
-/**
- * 判断是否有子分类
- */
-const hasSubCategories = (categoryId: string) => {
-  return getSubCategories(categoryId).length > 0;
-};
+const allCategories = computed(() => {
+  return configStore.primaryCategories.filter(cat => !cat.isHot);
+});
 
 // ========== 方法 ==========
 
 /**
+ * 获取子分类
+ */
+function getSubCategories(parentId: string) {
+  const result = configStore.getSubCategories(parentId);
+  console.log('getSubCategories called for:', parentId, 'result:', result);
+  return result;
+}
+
+/**
+ * 判断是否有子分类
+ */
+function hasSubCategories(categoryId: string) {
+  const subs = getSubCategories(categoryId);
+  const hasSubs = subs.length > 0;
+  console.log('hasSubCategories for', categoryId, ':', hasSubs, 'subs:', subs);
+  return hasSubs;
+}
+
+/**
  * 处理分类点击
  */
-function handleCategoryClick(categoryId: string | null) {
+function handleCategoryClick(categoryId: string | null, isSubCategory: boolean = false) {
   // 判断当前是否在资源列表页
   const isResourceListPage = route.path === '/resource' || route.name === 'ResourceList';
 
+  // 如果是一级分类且有子分类
+  if (!isSubCategory && categoryId && hasSubCategories(categoryId)) {
+    // 如果当前已经选中这个分类，则只切换展开/收起状态，不重新跳转
+    if (currentCategoryId.value === categoryId) {
+      toggleCategoryExpand(categoryId);
+      return;
+    }
+    
+    // 如果未选中，则展开子分类（但继续执行跳转逻辑）
+    if (!isCategoryExpanded(categoryId)) {
+      expandedCategories.value.push(categoryId);
+    }
+    // 注意：这里不return，继续执行下面的跳转逻辑
+  }
+
+  // 跳转到分类筛选
   if (isResourceListPage) {
     // 在资源列表页：更新当前页面的路由参数
     router.push({
@@ -228,9 +109,27 @@ function handleCategoryClick(categoryId: string | null) {
     // 在其他页面（如首页）：触发事件，由父组件处理跳转
     emit('categoryChange', categoryId);
   }
+}
 
-  // 关闭下拉菜单
-  hoveredCategoryId.value = null;
+/**
+ * 切换分类展开/收起
+ */
+function toggleCategoryExpand(categoryId: string) {
+  const index = expandedCategories.value.indexOf(categoryId);
+  if (index > -1) {
+    // 已展开,收起
+    expandedCategories.value.splice(index, 1);
+  } else {
+    // 未展开,展开
+    expandedCategories.value.push(categoryId);
+  }
+}
+
+/**
+ * 判断分类是否展开
+ */
+function isCategoryExpanded(categoryId: string) {
+  return expandedCategories.value.includes(categoryId);
 }
 
 /**
@@ -242,247 +141,318 @@ function handleIconError(event: Event) {
   img.style.display = 'none';
 }
 
-/**
- * 处理分类悬浮（桌面端）
- */
-function handleCategoryHover(categoryId: string) {
-  // 仅在桌面端显示下拉菜单
-  if (window.innerWidth >= 768) {
-    hoveredCategoryId.value = categoryId;
-  }
-}
-
-/**
- * 处理分类离开
- */
-function handleCategoryLeave() {
-  // 延迟关闭，允许鼠标移动到下拉菜单
-  setTimeout(() => {
-    hoveredCategoryId.value = null;
-  }, 200);
-}
-
-/**
- * 检查滚动状态
- */
-function checkScrollStatus() {
-  if (!scrollContainer.value) return;
-
-  const { scrollLeft, scrollWidth, clientWidth } = scrollContainer.value;
-  canScrollLeft.value = scrollLeft > 0;
-  canScrollRight.value = scrollLeft < scrollWidth - clientWidth - 1;
-}
-
-/**
- * 向左滚动
- */
-function scrollLeft() {
-  if (!scrollContainer.value) return;
-  scrollContainer.value.scrollBy({
-    left: -200,
-    behavior: 'smooth'
-  });
-}
-
-/**
- * 向右滚动
- */
-function scrollRight() {
-  if (!scrollContainer.value) return;
-  scrollContainer.value.scrollBy({
-    left: 200,
-    behavior: 'smooth'
-  });
-}
-
-/**
- * 鼠标拖拽滚动 - 开始
- */
-function handleMouseDown(e: MouseEvent) {
-  if (!scrollContainer.value) return;
-
-  isDragging.value = true;
-  startX.value = e.pageX - scrollContainer.value.offsetLeft;
-  scrollLeftStart.value = scrollContainer.value.scrollLeft;
-  scrollContainer.value.style.cursor = 'grabbing';
-}
-
-/**
- * 鼠标拖拽滚动 - 移动
- */
-function handleMouseMove(e: MouseEvent) {
-  if (!isDragging.value || !scrollContainer.value) return;
-
-  e.preventDefault();
-  const x = e.pageX - scrollContainer.value.offsetLeft;
-  const walk = (x - startX.value) * 2; // 滚动速度
-  scrollContainer.value.scrollLeft = scrollLeftStart.value - walk;
-}
-
-/**
- * 鼠标拖拽滚动 - 结束
- */
-function handleMouseUp() {
-  isDragging.value = false;
-  if (scrollContainer.value) {
-    scrollContainer.value.style.cursor = 'grab';
-  }
-}
-
-/**
- * 触摸滚动 - 开始
- */
-function handleTouchStart(e: TouchEvent) {
-  if (!scrollContainer.value) return;
-
-  startX.value = e.touches[0].pageX - scrollContainer.value.offsetLeft;
-  scrollLeftStart.value = scrollContainer.value.scrollLeft;
-}
-
-/**
- * 触摸滚动 - 移动
- */
-function handleTouchMove(e: TouchEvent) {
-  if (!scrollContainer.value) return;
-
-  const x = e.touches[0].pageX - scrollContainer.value.offsetLeft;
-  const walk = (x - startX.value) * 2;
-  scrollContainer.value.scrollLeft = scrollLeftStart.value - walk;
-}
-
-/**
- * 触摸滚动 - 结束
- */
-function handleTouchEnd() {
-  // 触摸结束，无需特殊处理
-}
-
 // ========== 生命周期 ==========
 
 onMounted(() => {
-  // 监听滚动事件
-  if (scrollContainer.value) {
-    scrollContainer.value.addEventListener('scroll', checkScrollStatus);
-    checkScrollStatus();
-  }
-
-  // 监听窗口大小变化
-  window.addEventListener('resize', checkScrollStatus);
-
   // 加载分类数据（如果还没有加载）
   if (configStore.categories.length === 0) {
     configStore.fetchCategories();
   }
+  
+  // 调试：检查分类数据
+  console.log('CategoryNav mounted, categories:', configStore.categories.length);
+  const ecommerce = configStore.categories.find(c => c.categoryName === '电商类');
+  console.log('电商类 category:', ecommerce);
+  console.log('电商类 children:', ecommerce?.children);
+  console.log('hotCategories:', configStore.hotCategories);
 });
-
-onUnmounted(() => {
-  // 移除事件监听
-  if (scrollContainer.value) {
-    scrollContainer.value.removeEventListener('scroll', checkScrollStatus);
-  }
-  window.removeEventListener('resize', checkScrollStatus);
-});
-
-// 监听分类数据变化，重新检查滚动状态
-watch(
-  () => configStore.categories,
-  () => {
-    setTimeout(checkScrollStatus, 100);
-  },
-  { deep: true }
-);
 </script>
+
+<template>
+  <div class="category-nav">
+    <!-- 热门分类 -->
+    <div class="category-section">
+      <h3 class="section-title">
+        热门分类
+      </h3>
+      <div class="category-list-vertical">
+        <div
+          v-for="category in hotCategories"
+          :key="category.categoryId"
+          class="category-group"
+        >
+          <!-- 一级分类 -->
+          <div
+            class="category-item-vertical"
+            :class="{
+              active: currentCategoryId === category.categoryId,
+              'has-children': hasSubCategories(category.categoryId),
+              expanded: isCategoryExpanded(category.categoryId)
+            }"
+            @click="handleCategoryClick(category.categoryId)"
+          >
+            <div class="category-content-vertical">
+              <!-- 分类图标 -->
+              <img
+                v-if="category.icon && category.icon.startsWith('/')"
+                :src="category.icon"
+                :alt="category.categoryName"
+                class="category-icon-img"
+                @error="handleIconError"
+              >
+              <el-icon
+                v-else
+                class="category-icon"
+              >
+                <Folder />
+              </el-icon>
+
+              <!-- 分类名称 -->
+              <span class="category-name">{{ category.categoryName }}</span>
+
+              <!-- 资源数量 -->
+              <span class="category-count">{{ category.resourceCount }}</span>
+
+              <!-- 展开/收起图标 -->
+              <el-icon
+                v-if="hasSubCategories(category.categoryId)"
+                class="expand-icon"
+                :class="{ expanded: isCategoryExpanded(category.categoryId) }"
+              >
+                <ArrowDown />
+              </el-icon>
+            </div>
+          </div>
+
+          <!-- 二级分类列表 -->
+          <transition name="sub-category-slide">
+            <div
+              v-if="isCategoryExpanded(category.categoryId) && hasSubCategories(category.categoryId)"
+              class="sub-category-list-vertical"
+            >
+              <div
+                v-for="subCategory in getSubCategories(category.categoryId)"
+                :key="subCategory.categoryId"
+                class="sub-category-item-vertical"
+                :class="{ active: currentCategoryId === subCategory.categoryId }"
+                @click.stop="handleCategoryClick(subCategory.categoryId, true)"
+              >
+                <span class="sub-category-name">{{ subCategory.categoryName }}</span>
+                <span class="sub-category-count">{{ subCategory.resourceCount }}</span>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全部分类 -->
+    <div class="category-section">
+      <h3 class="section-title">
+        全部分类
+      </h3>
+      <div class="category-list-vertical">
+        <!-- 全部选项 -->
+        <div
+          class="category-item-vertical"
+          :class="{ active: !currentCategoryId }"
+          @click="handleCategoryClick(null)"
+        >
+          <div class="category-content-vertical">
+            <el-icon class="category-icon">
+              <Grid />
+            </el-icon>
+            <span class="category-name">全部</span>
+          </div>
+        </div>
+
+        <!-- 一级分类列表 -->
+        <div
+          v-for="category in allCategories"
+          :key="category.categoryId"
+          class="category-group"
+        >
+          <!-- 一级分类 -->
+          <div
+            class="category-item-vertical"
+            :class="{
+              active: currentCategoryId === category.categoryId,
+              'has-children': hasSubCategories(category.categoryId),
+              expanded: isCategoryExpanded(category.categoryId)
+            }"
+            @click="handleCategoryClick(category.categoryId)"
+          >
+            <div class="category-content-vertical">
+              <!-- 分类图标 -->
+              <img
+                v-if="category.icon && category.icon.startsWith('/')"
+                :src="category.icon"
+                :alt="category.categoryName"
+                class="category-icon-img"
+                @error="handleIconError"
+              >
+              <el-icon
+                v-else
+                class="category-icon"
+              >
+                <Folder />
+              </el-icon>
+
+              <!-- 分类名称 -->
+              <span class="category-name">{{ category.categoryName }}</span>
+
+              <!-- 资源数量 -->
+              <span class="category-count">{{ category.resourceCount }}</span>
+
+              <!-- 展开/收起图标 -->
+              <el-icon
+                v-if="hasSubCategories(category.categoryId)"
+                class="expand-icon"
+                :class="{ expanded: isCategoryExpanded(category.categoryId) }"
+              >
+                <ArrowDown />
+              </el-icon>
+            </div>
+          </div>
+
+          <!-- 二级分类列表 -->
+          <transition name="sub-category-slide">
+            <div
+              v-if="isCategoryExpanded(category.categoryId) && hasSubCategories(category.categoryId)"
+              class="sub-category-list-vertical"
+            >
+              <div
+                v-for="subCategory in getSubCategories(category.categoryId)"
+                :key="subCategory.categoryId"
+                class="sub-category-item-vertical"
+                :class="{ active: currentCategoryId === subCategory.categoryId }"
+                @click.stop="handleCategoryClick(subCategory.categoryId, true)"
+              >
+                <span class="sub-category-name">{{ subCategory.categoryName }}</span>
+                <span class="sub-category-count">{{ subCategory.resourceCount }}</span>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped lang="scss">
 .category-nav {
-  position: relative;
   width: 100%;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
-.category-scroll-container {
-  overflow-x: auto;
-  overflow-y: hidden;
-  cursor: grab;
-  user-select: none;
-
-  /* 隐藏滚动条 */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-
-  &::-webkit-scrollbar {
-    display: none; /* Chrome/Safari */
-  }
-
-  &:active {
-    cursor: grabbing;
-  }
-}
-
-.category-list {
-  display: flex;
-  gap: 8px;
+.category-section {
   padding: 16px;
-  min-width: min-content;
+  border-bottom: 1px solid #f0f0f0;
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
-.category-item {
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 14px 0;
+  padding-left: 4px;
   position: relative;
-  flex-shrink: 0;
-  padding: 10px 16px;
-  background: #f5f7fa;
-  border-radius: 6px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, #165dff 0%, #4080ff 100%);
+    border-radius: 2px;
+  }
+}
+
+.category-list-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.category-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.category-item-vertical {
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #fff;
+  border: 1px solid transparent;
+  position: relative;
 
   &:hover {
-    background: #e8f4ff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(22, 93, 255, 0.15);
+    background: #f7f9fc;
+    border-color: #e8edf3;
+    transform: translateX(1px);
+
+    .category-icon {
+      color: #165dff;
+      transform: scale(1.05);
+    }
+
+    .expand-icon {
+      color: #165dff;
+    }
   }
 
   &.active {
-    background: linear-gradient(135deg, #165dff 0%, #4080ff 100%);
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
+    background: linear-gradient(135deg, #e8f4ff 0%, #f0f7ff 100%);
+    border-color: #b3d8ff;
+    box-shadow: 0 2px 12px rgba(22, 93, 255, 0.1);
 
-    .category-name,
-    .category-count {
-      color: #fff;
+    .category-name {
+      color: #165dff;
+      font-weight: 600;
     }
 
     .category-icon {
-      color: #fff;
+      color: #165dff;
     }
 
-    .hot-badge {
-      background: rgba(255, 255, 255, 0.3);
-      color: #fff;
+    .category-count {
+      color: #165dff;
+      background: rgba(22, 93, 255, 0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
     }
   }
 
   &.has-children {
-    padding-right: 32px;
+    .category-content-vertical {
+      padding-right: 40px;
+      position: relative;
+    }
+  }
+
+  &.expanded {
+    background: #fafbfc;
+    border-color: #e3e8ef;
   }
 }
 
-.category-content {
+.category-content-vertical {
   display: flex;
   align-items: center;
-  gap: 6px;
-  white-space: nowrap;
+  gap: 8px;
+  flex: 1;
 }
 
 .category-icon {
   font-size: 18px;
-  color: #165dff;
-
-  .active & {
-    color: #fff;
-  }
+  color: #606266;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
 }
 
 .category-icon-img {
@@ -494,174 +464,183 @@ watch(
 
 .category-name {
   font-size: 14px;
-  font-weight: 500;
   color: #303133;
-
-  .active & {
-    color: #fff;
-  }
+  flex: 1;
 }
 
 .category-count {
   font-size: 12px;
   color: #909399;
-
-  .active & {
-    color: rgba(255, 255, 255, 0.8);
-  }
-}
-
-.hot-badge {
-  padding: 2px 6px;
-  background: linear-gradient(135deg, #ff7d00 0%, #ffa940 100%);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 3px;
-  margin-left: 4px;
+  margin-left: auto;
+  transition: all 0.2s ease;
 }
 
 .expand-icon {
   position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: 10px;
   font-size: 14px;
   color: #909399;
-  transition: transform 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-  .active & {
-    color: #fff;
-  }
-
-  .category-item:hover & {
-    transform: translateY(-50%) rotate(180deg);
+  &.expanded {
+    transform: rotate(180deg);
+    color: #165dff;
   }
 }
 
-/* 二级分类下拉菜单 */
-.sub-category-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  min-width: 200px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  padding: 8px;
-  z-index: 1000;
+/* 二级分类列表 */
+.sub-category-list-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 26px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  position: relative;
 
+  // 左侧连接线
   &::before {
     content: '';
     position: absolute;
-    top: -6px;
-    left: 20px;
-    width: 12px;
-    height: 12px;
-    background: #fff;
-    transform: rotate(45deg);
-    box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.06);
+    left: 12px;
+    top: 0;
+    bottom: 8px;
+    width: 1px;
+    background: linear-gradient(to bottom, #e0e0e0 0%, #e0e0e0 100%);
   }
 }
 
-.sub-category-item {
+.sub-category-item-vertical {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 9px 14px;
+  padding-left: 20px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #fff;
+  border: 1px solid transparent;
+  position: relative;
+
+  // 左侧小圆点
+  &::before {
+    content: '';
+    position: absolute;
+    left: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d0d0d0;
+    transition: all 0.25s ease;
+  }
 
   &:hover {
-    background: #f5f7fa;
+    background: #f7f9fc;
+    border-color: #e3e8ef;
+    transform: translateX(2px);
+
+    &::before {
+      background: #909399;
+      width: 7px;
+      height: 7px;
+    }
+
+    .sub-category-name {
+      color: #303133;
+    }
   }
 
   &.active {
-    background: #e8f4ff;
+    background: linear-gradient(90deg, #e8f4ff 0%, #f0f7ff 100%);
+    border-color: #b3d8ff;
+    box-shadow: 0 2px 8px rgba(22, 93, 255, 0.08);
+
+    &::before {
+      background: #165dff;
+      width: 8px;
+      height: 8px;
+      box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.1);
+    }
 
     .sub-category-name {
       color: #165dff;
       font-weight: 600;
     }
+
+    .sub-category-count {
+      color: #165dff;
+      font-weight: 500;
+      background: rgba(22, 93, 255, 0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
   }
 }
 
 .sub-category-name {
-  font-size: 14px;
-  color: #303133;
+  font-size: 13px;
+  color: #606266;
+  transition: color 0.2s ease;
+  flex: 1;
 }
 
 .sub-category-count {
   font-size: 12px;
   color: #909399;
+  transition: all 0.2s ease;
+  min-width: 20px;
+  text-align: right;
 }
 
-/* 下拉动画 */
-.dropdown-enter-active,
-.dropdown-leave-active {
-  transition: all 0.3s ease;
+/* 二级分类展开动画 */
+.sub-category-slide-enter-active {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
-.dropdown-enter-from,
-.dropdown-leave-to {
+.sub-category-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.6, 1);
+  overflow: hidden;
+}
+
+.sub-category-slide-enter-from {
+  max-height: 0;
   opacity: 0;
-  transform: translateY(-10px);
+  margin-top: 0;
+  transform: translateY(-8px);
 }
 
-/* 滚动按钮 */
-.scroll-buttons {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
-  padding: 0 8px;
+.sub-category-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  transform: translateY(-4px);
 }
 
-.scroll-button {
-  width: 32px;
-  height: 32px;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-
-  &:hover:not(:disabled) {
-    background: #165dff;
-    border-color: #165dff;
-    color: #fff;
-    transform: scale(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  .el-icon {
-    font-size: 16px;
-  }
+.sub-category-slide-enter-to,
+.sub-category-slide-leave-from {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 8px;
+  transform: translateY(0);
 }
 
 /* 移动端适配 */
 @media (max-width: 768px) {
-  .category-list {
-    gap: 6px;
+  .category-section {
     padding: 12px;
   }
 
-  .category-item {
-    padding: 8px 12px;
+  .section-title {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .category-item-vertical {
+    padding: 8px 10px;
   }
 
   .category-name {
@@ -672,25 +651,16 @@ watch(
     font-size: 11px;
   }
 
-  .scroll-buttons {
-    display: none;
+  .sub-category-list-vertical {
+    padding-left: 24px;
   }
 
-  /* 移动端不显示二级分类下拉 */
-  .sub-category-dropdown {
-    display: none;
-  }
-}
-
-/* 平板适配 */
-@media (min-width: 768px) and (max-width: 1200px) {
-  .category-list {
-    gap: 6px;
-    padding: 14px;
+  .sub-category-item-vertical {
+    padding: 6px 10px;
   }
 
-  .category-item {
-    padding: 9px 14px;
+  .sub-category-name {
+    font-size: 12px;
   }
 }
 </style>

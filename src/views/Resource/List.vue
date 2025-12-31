@@ -25,6 +25,7 @@ import ResourceCard from '@/components/business/ResourceCard.vue';
 import Loading from '@/components/common/Loading.vue';
 import Empty from '@/components/common/Empty.vue';
 import { Connection } from '@element-plus/icons-vue';
+import { ArrowDown } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
 /**
@@ -55,6 +56,11 @@ const filters = ref({
  * 临时选中的分类ID（用于确定按钮）
  */
 const tempSelectedCategoryId = ref<string | undefined>(undefined);
+
+/**
+ * 展开的分类ID列表（用于显示二级分类）
+ */
+const expandedCategories = ref<string[]>([]);
 
 /**
  * 支持的文件格式列表
@@ -279,9 +285,45 @@ function updateURL() {
  * 处理热门分类点击（直接筛选）
  */
 function handleHotCategoryClick(categoryId: string | undefined) {
+  // 如果有子分类且当前已选中，只切换展开/收起状态
+  if (categoryId && hasSubCategories(categoryId) && filters.value.categoryId === categoryId) {
+    const index = expandedCategories.value.indexOf(categoryId);
+    if (index > -1) {
+      // 已展开，收起
+      expandedCategories.value.splice(index, 1);
+    } else {
+      // 未展开，展开
+      expandedCategories.value.push(categoryId);
+    }
+    return;
+  }
+  
+  // 如果有子分类但未选中，展开子分类并执行筛选
+  if (categoryId && hasSubCategories(categoryId)) {
+    if (!expandedCategories.value.includes(categoryId)) {
+      expandedCategories.value.push(categoryId);
+    }
+    // 继续执行下面的筛选逻辑
+  }
+  
+  // 执行筛选
   filters.value.categoryId = categoryId;
   resourceStore.setCategory(categoryId);
   updateURL();
+}
+
+/**
+ * 判断是否有子分类
+ */
+function hasSubCategories(categoryId: string): boolean {
+  return configStore.getSubCategories(categoryId).length > 0;
+}
+
+/**
+ * 获取子分类列表
+ */
+function getSubCategories(categoryId: string) {
+  return configStore.getSubCategories(categoryId);
 }
 
 /**
@@ -447,11 +489,45 @@ watch(
               <div
                 v-for="category in hotCategories"
                 :key="category.categoryId"
-                class="category-tag hot-tag"
-                :class="{ 'selected': filters.categoryId === category.categoryId }"
-                @click="handleHotCategoryClick(category.categoryId)"
+                class="category-group"
               >
-                {{ category.categoryName }}
+                <!-- 一级分类 -->
+                <div
+                  class="category-tag hot-tag"
+                  :class="{ 
+                    'selected': filters.categoryId === category.categoryId,
+                    'has-children': hasSubCategories(category.categoryId),
+                    'expanded': expandedCategories.includes(category.categoryId)
+                  }"
+                  @click="handleHotCategoryClick(category.categoryId)"
+                >
+                  {{ category.categoryName }}
+                  <el-icon
+                    v-if="hasSubCategories(category.categoryId)"
+                    class="expand-arrow"
+                    :class="{ 'expanded': expandedCategories.includes(category.categoryId) }"
+                  >
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                
+                <!-- 二级分类 -->
+                <transition name="sub-category-slide">
+                  <div
+                    v-if="expandedCategories.includes(category.categoryId) && hasSubCategories(category.categoryId)"
+                    class="sub-category-list"
+                  >
+                    <div
+                      v-for="subCategory in getSubCategories(category.categoryId)"
+                      :key="subCategory.categoryId"
+                      class="sub-category-tag"
+                      :class="{ 'selected': filters.categoryId === subCategory.categoryId }"
+                      @click.stop="handleHotCategoryClick(subCategory.categoryId)"
+                    >
+                      {{ subCategory.categoryName }}
+                    </div>
+                  </div>
+                </transition>
               </div>
             </div>
           </div>
@@ -470,11 +546,45 @@ watch(
               <div
                 v-for="category in allCategoriesFiltered"
                 :key="category.categoryId"
-                class="category-tag"
-                :class="{ 'selected': filters.categoryId === category.categoryId }"
-                @click="handleHotCategoryClick(category.categoryId)"
+                class="category-group"
               >
-                {{ category.categoryName }}
+                <!-- 一级分类 -->
+                <div
+                  class="category-tag"
+                  :class="{ 
+                    'selected': filters.categoryId === category.categoryId,
+                    'has-children': hasSubCategories(category.categoryId),
+                    'expanded': expandedCategories.includes(category.categoryId)
+                  }"
+                  @click="handleHotCategoryClick(category.categoryId)"
+                >
+                  {{ category.categoryName }}
+                  <el-icon
+                    v-if="hasSubCategories(category.categoryId)"
+                    class="expand-arrow"
+                    :class="{ 'expanded': expandedCategories.includes(category.categoryId) }"
+                  >
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                
+                <!-- 二级分类 -->
+                <transition name="sub-category-slide">
+                  <div
+                    v-if="expandedCategories.includes(category.categoryId) && hasSubCategories(category.categoryId)"
+                    class="sub-category-list"
+                  >
+                    <div
+                      v-for="subCategory in getSubCategories(category.categoryId)"
+                      :key="subCategory.categoryId"
+                      class="sub-category-tag"
+                      :class="{ 'selected': filters.categoryId === subCategory.categoryId }"
+                      @click.stop="handleHotCategoryClick(subCategory.categoryId)"
+                    >
+                      {{ subCategory.categoryName }}
+                    </div>
+                  </div>
+                </transition>
               </div>
             </div>
           </div>
@@ -657,6 +767,27 @@ watch(
   font-weight: 500;
 }
 
+/* 页面容器 - 侧边栏布局 */
+.page-container {
+  display: flex;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* 左侧边栏 */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+/* 右侧主内容区 */
+.main-content {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 筛选栏 */
 .filter-bar {
   background: #fff;
@@ -710,9 +841,15 @@ watch(
   flex-wrap: wrap;
   gap: 8px;
   flex: 1;
-  align-items: center;
+  align-items: flex-start;
   position: relative;
   z-index: 1;
+}
+
+.category-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .category-tag {
@@ -729,6 +866,24 @@ watch(
   overflow: visible;
   line-height: 1.5;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.category-tag.has-children {
+  padding-right: 40px !important;
+}
+
+.expand-arrow {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+
+.expand-arrow.expanded {
+  transform: rotate(180deg);
 }
 
 .category-tag:hover {
@@ -785,6 +940,78 @@ watch(
   z-index: 100;
   box-shadow: 0 2px 4px rgba(255, 125, 0, 0.4);
   pointer-events: none;
+}
+
+/* 二级分类列表 */
+.sub-category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 20px;
+  margin-top: 4px;
+}
+
+.sub-category-tag {
+  padding: 4px 10px;
+  background: #fafafa;
+  border: 1px solid #e4e7ed;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #606266;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  position: relative;
+}
+
+.sub-category-tag::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: #dcdfe6;
+  border-radius: 50%;
+}
+
+.sub-category-tag:hover {
+  background: #e8f4ff;
+  border-color: #165dff;
+  color: #165dff;
+}
+
+.sub-category-tag.selected {
+  background: linear-gradient(135deg, #4080ff 0%, #6db0ff 100%);
+  border-color: #4080ff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.sub-category-tag.selected::before {
+  background: #fff;
+}
+
+/* 二级分类展开动画 */
+.sub-category-slide-enter-active,
+.sub-category-slide-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.sub-category-slide-enter-from,
+.sub-category-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.sub-category-slide-enter-to,
+.sub-category-slide-leave-from {
+  max-height: 200px;
+  opacity: 1;
+  margin-top: 4px;
 }
 
 .confirm-button {

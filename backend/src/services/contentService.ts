@@ -190,7 +190,7 @@ export async function getPublicCategories(parentId?: string) {
     return categories.map((cat) => ({
       categoryId: cat.category_id,
       categoryName: cat.category_name,
-      code: cat.category_code,
+      categoryCode: cat.category_code,
       parentId: cat.parent_id,
       icon: cat.icon,
       sort: cat.sort_order,
@@ -200,7 +200,7 @@ export async function getPublicCategories(parentId?: string) {
       children: cat.other_categories.map((child) => ({
         categoryId: child.category_id,
         categoryName: child.category_name,
-        code: child.category_code,
+        categoryCode: child.category_code,
         parentId: child.parent_id,
         icon: child.icon,
         sort: child.sort_order,
@@ -219,6 +219,7 @@ export async function getPublicCategories(parentId?: string) {
  * 获取分类树
  */
 export async function getCategoryTree() {
+  // 直接返回一级分类及其子分类
   return getPublicCategories();
 }
 

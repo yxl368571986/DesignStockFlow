@@ -82,12 +82,14 @@ export interface BannerInfo {
 export interface CategoryInfo {
   categoryId: string;
   categoryName: string;
+  categoryCode?: string; // 分类代码
   icon?: string;
   parentId?: string | null; // 父分类ID（二级分类），null表示一级分类
   sort: number;
   isHot: boolean; // 是否热门
   isRecommend: boolean; // 是否推荐
   resourceCount: number; // 资源数量
+  children?: CategoryInfo[]; // 子分类列表（用于分类树结构）
 }
 
 // 上传元数据
